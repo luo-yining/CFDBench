@@ -72,43 +72,43 @@ def get_auto_dataset(
         data_name: One of: 'poiseuille', 'cavity', 'karman'
         delta_time: The time difference between input and output.
     """
-    data_name = data_name.split("_")[0]
-    assert data_name in ["cavity", "laminar", "karman", "dam"]
-    data_name = data_name[len(data_name) + 1 :]
+    problem_name = data_name.split("_")[0]
+    assert problem_name in ["cavity", "laminar", "cylinder", "dam"]
+    subset_name = data_name[len(problem_name) + 1 :]
     assert delta_time > 0
     print("Loading data...")
-    if data_name == "laminar":
+    if problem_name == "laminar":
         train_data, dev_data, test_data = get_laminar_auto_datasets(
-            data_dir / data_name,
-            data_name,
+            data_dir / problem_name,
+            case_name=subset_name,
             delta_time=delta_time,
             norm_props=norm_props,
             norm_bc=norm_bc,
         )
         return train_data, dev_data, test_data
-    elif data_name == "cavity":
+    elif problem_name == "cavity":
         # data_dir = Path("data", data_name)
         train_data, dev_data, test_data = get_cavity_auto_datasets(
-            data_dir / data_name,
-            case_name=data_name,
+            data_dir / problem_name,
+            case_name=subset_name,
             norm_props=norm_props,
             norm_bc=norm_bc,
             delta_time=delta_time,
         )
         return train_data, dev_data, test_data
-    elif data_name == 'karman':
+    elif problem_name == 'karman':
         train_data, dev_data, test_data = get_karman_auto_datasets(
-            data_dir / data_name,
-            case_name=data_name,
+            data_dir / problem_name,
+            case_name=subset_name,
             norm_props=norm_props,
             norm_bc=norm_bc,
             delta_time=delta_time,
         )
         return train_data, dev_data, test_data
-    elif data_name == "dam":
+    elif problem_name == "dam":
         train_data, dev_data, test_data = get_dam_auto_datasets(
-            data_dir / data_name,
-            case_name=data_name,
+            data_dir / problem_name,
+            case_name=subset_name,
             norm_props=norm_props,
             norm_bc=norm_bc,
             delta_time=delta_time,

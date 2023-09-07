@@ -99,7 +99,7 @@ def evaluate(
                     inp=label[0][0],
                     label=label[0][0],
                     pred=preds[0][0],
-                    output_file=image_dir / f"step_{step}.png",
+                    out_path=image_dir / f"step_{step}.png",
                 )
 
     if measure_time:

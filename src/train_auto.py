@@ -23,6 +23,7 @@ from utils import (
     plot_loss,
     get_output_dir,
     load_best_ckpt,
+    plot_predictions,
 )
 from utils_auto import init_model
 from args import Args
@@ -62,8 +63,6 @@ def evaluate(
     loader = DataLoader(
         data, batch_size=batch_size, shuffle=False, collate_fn=collate_fn
     )
-    num_batches = len(loader)
-    plot_interval = max(num_batches // 20, 1)
     scores = {name: [] for name in model.loss_fn.get_score_names()}
     input_scores = deepcopy(scores)
     all_preds: List[Tensor] = []
@@ -103,16 +102,23 @@ def evaluate(
             if step % plot_interval == 0 and not measure_time:
                 image_dir = output_dir / "images"
                 image_dir.mkdir(exist_ok=True, parents=True)
-                plot(
-                    inputs[0][0],
-                    labels[0][0],
-                    preds[0][0],
-                    image_dir / f"step_{step}.png",
+                # plot(
+                #     inputs[0][0],
+                #     labels[0][0],
+                #     preds[0][0],
+                #     image_dir / f"step_{step}.png",
+                # )
+                plot_predictions(
+                    inp=inputs[0][0],
+                    label=labels[0][0],
+                    pred=preds[0][0],
+                    out_dir=image_dir,
+                    step=step,
                 )
 
     if measure_time:
         print("Memory usage:")
-        print(torch.cuda.memory_summary('cuda'))
+        print(torch.cuda.memory_summary("cuda"))
         print("Time usage:")
         time_per_step = 1000 * (time.time() - start_time) / len(loader)
         print(f"Time (ms) per step: {time_per_step:.3f}")
@@ -144,6 +150,7 @@ def test(
     infer_steps: int = 200,
     plot_interval: int = 10,
     batch_size: int = 1,
+    measure_time: bool = False,
 ):
     assert infer_steps > 0
     image_dir = output_dir / "images"
@@ -151,10 +158,16 @@ def test(
 
     print("=== Testing ===")
     print(f"batch_size: {batch_size}")
+    print(f"Plot interval: {plot_interval}")
     output_dir.mkdir(exist_ok=True, parents=True)
 
     result = evaluate(
-        model, data, output_dir, batch_size=batch_size, plot_interval=plot_interval
+        model,
+        data,
+        output_dir=output_dir,
+        batch_size=batch_size,
+        plot_interval=plot_interval,
+        measure_time=measure_time,
     )
     scores = result["scores"]
     preds = result["preds"]
@@ -176,7 +189,7 @@ def train(
     eval_batch_size: int = 2,
     log_interval: int = 10,
     eval_interval: int = 2,
-    measure_time: bool = True,
+    measure_time: bool = False,
 ):
     train_loader = DataLoader(
         train_data, batch_size=batch_size, shuffle=True, collate_fn=collate_fn
@@ -239,7 +252,7 @@ def train(
 
         if measure_time:
             print("Memory usage:")
-            print(torch.cuda.memory_summary('cuda'))
+            print(torch.cuda.memory_summary("cuda"))
             print("Time usage:")
             print(time.time() - ep_start_time)
             exit()
@@ -306,7 +319,6 @@ def main():
     model = init_model(args)
     num_params = sum(p.numel() for p in model.parameters())
     print(f"Model has {num_params} parameters")
-    # load_ckpt(model, "result/poiseuille/unet.pt")
 
     if "train" in args.mode:
         args.save(str(output_dir / "train_args.json"))
@@ -334,8 +346,8 @@ def main():
             test_data,
             output_dir / "test",
             batch_size=1,
-            infer_steps=10,
-            plot_interval=1,
+            infer_steps=20,
+            plot_interval=10,
         )
 
 

@@ -274,7 +274,7 @@ class CavityAutoDataset(CfdAutoDataset):
         all_inputs: List[Tensor] = []
         all_labels: List[Tensor] = []
         all_case_ids: List[int] = []  # The case ID of each feature
-        self.all_features: List[np.ndarray]  # (# case, # frames, 3, h, w)
+        self.all_features: List[np.ndarray] = []  # (# case, # frames, 3, h, w)
 
         # Loop through each frame in each case, create features labels
         for case_id, case_dir in enumerate(case_dirs):
@@ -382,12 +382,13 @@ def get_cavity_auto_datasets(
     for name in ["prop", "bc", "geo"]:
         if name in case_name:
             case_dir = data_dir / name
+            print(f"Getting cases from: {case_dir}")
             this_case_dirs = sorted(
                 case_dir.glob("case*"), key=lambda x: int(x.name[4:])
             )
             case_dirs += this_case_dirs
 
-    assert case_dirs
+    assert case_dirs != []
 
     random.seed(seed)
     random.shuffle(case_dirs)

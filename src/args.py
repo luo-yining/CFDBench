@@ -8,7 +8,7 @@ class Args(Tap):
     """The directory to save the results to"""
     lr: float = 1e-3  # Initial learning rate
     lr_step_size: int = 20  # LR decays every lr_step_size epochs
-    num_epochs: int = 200  # Number of epochs to train for
+    num_epochs: int = 100  # Number of epochs to train for
     eval_interval: int = 10  # Evaluate every eval_interval epochs, and save checkpoint
     log_interval: int = 10  # Log training progress every log_interval batches
 
@@ -35,7 +35,7 @@ class Args(Tap):
     subset to use. E.g., 'laminar_prop_geo' trains on the subset of laminar
     task with varying geometry and physical properties.
     """
-    data_dir: str = "data"
+    data_dir: str = "../data"
     """The directory that contains the CFDBench."""
     norm_props: int = 1
     """Whether to normalize the physical properties."""

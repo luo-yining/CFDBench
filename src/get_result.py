@@ -6,16 +6,12 @@ from utils import load_json
 
 
 def get_dev_losses(output_dir: Path):
-    # ckpt_dirs = output_dir.glob('*')
     ckpt_dirs = output_dir.glob('ckpt-*')
-    # ckpt_dirs = sorted(ckpt_dirs, key=lambda x: int(x.name.split('-')[1]))
     dev_scores = {
         'mse': [],
         'nmse': [],
     }
     for ckpt_dir in ckpt_dirs:
-        # scores = load_json(ckpt_dir / 'dev_scores.json')
-        # dev_losses.append(scores['dev_loss'])
         scores = load_json(ckpt_dir / 'dev_scores.json')['mean']
         for key in dev_scores:
             dev_scores[key].append(scores[key])
