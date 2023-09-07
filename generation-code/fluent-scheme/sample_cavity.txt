@@ -1,0 +1,35 @@
+
+(ti-menu-load-string "define/materials/change-create/air air yes constant {density} no no yes constant {viscosity} no no no") 
+
+(ti-menu-load-string "define/boundary-conditions/wall wall_top no no no no no {velocity} 1 0 no") 
+
+(ti-menu-load-string "solve/initialize/set-defaluts/pressure 0") 
+(ti-menu-load-string "solve/initialize/set-defaluts/x-velocity 0") 
+(ti-menu-load-string "solve/initialize/set-defaluts/y-velocity 0") 
+(ti-menu-load-string "solve/initialize/initialize-flow") 
+
+(ti-menu-load-string "file/transient-export/delete {old_var}") 
+
+(ti-menu-load-string "file/transient-export ascii {path_file} wall_top wall_bottom wall_left wall_right int_fluid () absolute-pressure velocity-magnitude x-velocity y-velocity stream-function () no no {new_var} flow-time 0.1 time-step") 
+
+(ti-menu-load-string "solve/set/transient-controls time-step-size 0.1") 
+
+(ti-menu-load-string "file/write-case {save_path}\{case_name}") 
+(ti-menu-load-string "solve/dual-time-iterate {num_time_steps} 20") 
+(ti-menu-load-string "file/write-data {save_path}\{data_name}") 
+
+(ti-menu-load-string "display/objects/display contour-velocity-magnitude") 
+(ti-menu-load-string "display/save-picture {save_path}\u.png") 
+(ti-menu-load-string "display/objects/display contour-u-stream") 
+(ti-menu-load-string "display/save-picture {save_path}\sf.png") 
+(ti-menu-load-string "display/objects/display pathlines-1") 
+(ti-menu-load-string "display/save-picture {save_path}\pathlines.png") 
+(ti-menu-load-string "plot/residuals yes yes yes yes yes") 
+(ti-menu-load-string "display/save-picture {save_path}\residuals.png") 
+(ti-menu-load-string "solve/report-plots/plot stream-function-rplot ()") 
+(ti-menu-load-string "display/save-picture {save_path}\monitor_sf.png") 
+(ti-menu-load-string "solve/report-plots/plot average-velocity-rplot ()") 
+(ti-menu-load-string "display/save-picture {save_path}\monitor_ua.png") 
+
+
+
