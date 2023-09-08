@@ -14,8 +14,8 @@ from .utils import load_json, normalize_bc, normalize_physics_props
 
 def load_case_data(case_dir: Path) -> Tuple[np.ndarray, Dict[str, float]]:
     """
-    Load from the file that I have preprocessed, and pad the boundary conditions,
-    turn into a numpy array of features.
+    Load from the file that I have preprocessed, and pad the boundary
+    conditions, turn into a numpy array of features.
 
     The shape of both u and v is (time steps, height, width)
     """
@@ -48,16 +48,16 @@ def load_case_data(case_dir: Path) -> Tuple[np.ndarray, Dict[str, float]]:
     return features, case_params
 
 
-class LaminarDataset(CfdDataset):
+class TubeFlowDataset(CfdDataset):
     """
-    Dataset for Laminar flow problem.
+    Dataset for Tube flow problem.
 
     Varying density and viscosity and inlet velocity for each case (3 variables).
     """
 
     data_delta_time = 0.1  # Time difference (s) between two frames in the data.
     data_max_time = 30  # Total time (s) in the data.
-    case_params_keys = ['vel_in', 'density', 'viscosity', 'height', 'width']
+    case_params_keys = ["vel_in", "density", "viscosity", "height", "width"]
 
     def __init__(
         self,
@@ -106,7 +106,7 @@ class LaminarDataset(CfdDataset):
             if self.norm_props:
                 normalize_physics_props(this_case_params)
             if self.norm_bc:
-                normalize_bc(this_case_params, 'vel_in')
+                normalize_bc(this_case_params, "vel_in")
 
             T, c, h, w = this_case_features.shape
             self.num_features += T * h * w
@@ -160,7 +160,7 @@ class LaminarDataset(CfdDataset):
         return self.num_frames_before[-1]
 
 
-class LaminarAutoDataset(CfdAutoDataset):
+class TubeFlowAutoDataset(CfdAutoDataset):
     """
     Dataset for Laminar flow problem.
 
@@ -240,9 +240,7 @@ class LaminarAutoDataset(CfdAutoDataset):
             # Stop when converged
             for i in range(num_steps):
                 inp = torch.tensor(inputs[i], dtype=torch.float32)  # (2, h, w)
-                out = torch.tensor(
-                    outputs[i], dtype=torch.float32
-                )
+                out = torch.tensor(outputs[i], dtype=torch.float32)
 
                 # Check for convergence
                 inp_magn = torch.sqrt(inp[0] ** 2 + inp[1] ** 2)
@@ -275,138 +273,19 @@ class LaminarAutoDataset(CfdAutoDataset):
         return len(self.inputs)
 
 
-class PoiseuilleDatasetDeeponet(CfdDataset):
-    """
-    Dataset for Poiseuille flow problem in DEEPONET.
-
-    Varying density and viscosity and inlet velocity for each case (4 variables).
-    """
-
-    data_delta_time = 0.25  # Time difference (s) between two frames in the data.
-    data_max_time = 30  # Total time (s) in the data.
-
-    def __init__(self, data_dir: Path, delta_time: float = 2.5):
-        """
-        Assume:
-        - time: 30s
-        - time steps: 120
-        - time step size: 0.25s
-
-        geometry 0：d=0.1m，l=1m
-        geometry 1-10 ：d=0.05-0.09m,0.11-0.15m，l=1m
-        geometry 11-20 ：d=0.1m，l=0.5-0.95m
-
-        case0：入口速度0.1 m/s，密度1000 kg /m^3，动力粘度0.01 Pa-s
-        case1-case21：入口速度0.05-0.15 m/s，du=0.005 m/s
-        case22-case42：密度900-1100 kg /m^3，dρ=10 kg/m^3
-        case43-case63：动力粘度0.005-0.015 Pa-s，dv=0.0005 Pa-s
-
-        Args:
-            data_dir: Path to the data directory.
-            delta_time: Time step size (in sec) to use for training.
-        """
-        self.data_dir = data_dir
-        self.delta_time = delta_time
-        self.frames_per_step = int(delta_time / self.data_delta_time)
-
-        self.geo_params = load_json(self.data_dir / "geometry.json")
-
-        self.load_data(self.data_dir, self.frames_per_step)
-
-    def load_data(self, data_dir: Path, frames_per_step: int = 10):
-        # 根据 case ID 来排序 case 子目录
-        self.case_dirs = sorted(data_dir.glob("case*"), key=lambda x: int(x.name[4:]))
-        # self.case_dirs = self.case_dirs[:2]  # TODO: remove this line
-        # list，包含每个case param (dict)
-        self.case_params = [
-            load_json(case_dir / "case.json") for case_dir in self.case_dirs
-        ]
-        # features & labels: (num_cases * (T - time_step_size), c, h, w)
-        self.features = []
-        self.labels = []
-        self.case_ids = []  # 每个样本对应的case的id
-        # 遍历每个case的每一帧，构造features和labels
-        for case_id, case_dir in enumerate(self.case_dirs):
-            print(f"Loading data from {case_dir.name}")
-            case_features = self.load_case_data(case_dir)  # (T, c, h, w)
-            inputs = case_features[:-frames_per_step, :]  # (T, 2, h, w)
-            outputs = case_features[frames_per_step:, :]  # (T, 2, h, w)
-            assert len(inputs) == len(outputs)
-            mean = inputs[:, 0].mean()
-            assert mean > 0.01, f"case {case_dir.name} input is {mean}"
-
-            for i in range(len(outputs)):
-                inp = torch.tensor(inputs[i], dtype=torch.float32)  # (2, h, w)
-                out = torch.tensor(outputs[i], dtype=torch.float32)
-                assert not torch.isnan(inp).any()
-                assert not torch.isnan(out).any()
-                self.features.append(inp)
-                self.labels.append(out)
-                self.case_ids.append(case_id)
-
-    def load_case_data(self, case_dir: Path) -> np.ndarray:
-        """
-        Load from the file that I have preprocessed, and pad the boundary conditions,
-        turn into a numpy array of features.
-
-        The shape of both u and v is (time steps, height, width)
-        """
-        case_params = load_json(case_dir / "case.json")
-
-        u_file = case_dir / "u.npy"
-        v_file = case_dir / "v.npy"
-        u = np.load(u_file)
-        v = np.load(v_file)
-
-        # The shape of u and v is (time steps, height, width)
-        # Pad the left side
-        u = np.pad(
-            u,
-            ((0, 0), (0, 0), (1, 0)),
-            mode="constant",
-            constant_values=case_params["velocity_in"],
-        )
-        v = np.pad(v, ((0, 0), (0, 0), (1, 0)), mode="constant", constant_values=0)
-        # Pad the top and bottom
-        u = np.pad(u, ((0, 0), (1, 1), (0, 0)), mode="constant", constant_values=0)
-        v = np.pad(v, ((0, 0), (1, 1), (0, 0)), mode="constant", constant_values=0)
-        features = np.stack([u, v], axis=1)  # (T, 2, h, w)
-        return features
-
-    def __getitem__(self, idx: int):
-        """
-        Return:
-            feat: (2, h, w)
-            label: (2, h, w)
-            case_params: dict, e.g. {"density": 1000, "viscosity": 0.01}
-        c=2
-        """
-        feat = self.features[idx]  # (2, h, w)
-        label = self.labels[idx]  # (2, h, w)
-        case_id = self.case_ids[idx]
-        case_params = self.case_params[case_id]
-        case_params = {
-            k: torch.tensor(v, dtype=torch.float32) for k, v in case_params.items()
-        }
-        return feat, label, case_params
-
-    def __len__(self):
-        return len(self.features)
-
-
-def get_laminar_datasets(
+def get_tube_datasets(
     data_dir: Path,
-    case_name,
+    subset_name: str,
     norm_props: bool,
     norm_bc: bool,
     seed: int = 0,
-) -> Tuple[LaminarDataset, LaminarDataset, LaminarDataset]:
+) -> Tuple[TubeFlowDataset, TubeFlowDataset, TubeFlowDataset]:
     """
     Returns: (train_data, dev_data, test_data)
     """
     case_dirs = []
     for name in ["prop", "bc", "geo"]:
-        if name in case_name:
+        if name in subset_name:
             case_dir = data_dir / name
             this_case_dirs = sorted(
                 case_dir.glob("case*"), key=lambda x: int(x.name[4:])
@@ -422,25 +301,25 @@ def get_laminar_datasets(
     train_case_dirs = case_dirs[:num_train]
     dev_case_dirs = case_dirs[num_train : num_train + num_dev]
     test_case_dirs = case_dirs[num_train + num_dev :]
-    train_data = LaminarDataset(train_case_dirs, norm_props=norm_props, norm_bc=norm_bc)
-    dev_data = LaminarDataset(dev_case_dirs, norm_props=norm_props, norm_bc=norm_bc)
-    test_data = LaminarDataset(test_case_dirs, norm_props=norm_props, norm_bc=norm_bc)
+    train_data = TubeFlowDataset(train_case_dirs, norm_props=norm_props, norm_bc=norm_bc)
+    dev_data = TubeFlowDataset(dev_case_dirs, norm_props=norm_props, norm_bc=norm_bc)
+    test_data = TubeFlowDataset(test_case_dirs, norm_props=norm_props, norm_bc=norm_bc)
     return train_data, dev_data, test_data
 
 
-def get_laminar_auto_datasets(
+def get_tube_auto_datasets(
     data_dir: Path,
-    case_name: str,
+    subset_name: str,
     norm_props: bool,
     norm_bc: bool,
     delta_time: float = 0.1,
     stable_state_diff: float = 0.001,
     seed: int = 0,
-) -> Tuple[LaminarAutoDataset, LaminarAutoDataset, LaminarAutoDataset]:
-    print(data_dir, case_name)
+) -> Tuple[TubeFlowAutoDataset, TubeFlowAutoDataset, TubeFlowAutoDataset]:
+    print(data_dir, subset_name)
     case_dirs = []
     for name in ["prop", "bc", "geo"]:
-        if name in case_name:
+        if name in subset_name:
             case_dir = data_dir / name
             this_case_dirs = sorted(
                 case_dir.glob("case*"), key=lambda x: int(x.name[4:])
@@ -472,14 +351,19 @@ def get_laminar_auto_datasets(
         norm_props=norm_props,
         norm_bc=norm_bc,
     )
-    train_data = LaminarAutoDataset(train_case_dirs, **kwargs)
-    dev_data = LaminarAutoDataset(dev_case_dirs, **kwargs)
-    test_data = LaminarAutoDataset(test_case_dirs, **kwargs)
+    train_data = TubeFlowAutoDataset(train_case_dirs, **kwargs)
+    dev_data = TubeFlowAutoDataset(dev_case_dirs, **kwargs)
+    test_data = TubeFlowAutoDataset(test_case_dirs, **kwargs)
     return train_data, dev_data, test_data
 
 
 if __name__ == "__main__":
-    data_dir = Path("../data/poiseuille/geometry0")
+    data_dir = Path("../../data")
+    problem_name = "tube"
+    subset_name = "geo"
     time_step_size = 10
-    dataset = PoiseuilleDatasetDeeponet(data_dir, time_step_size)
-    exit()
+    datasets = get_tube_auto_datasets(
+        data_dir=data_dir / problem_name,
+        subset_name=subset_name,
+        delta_time=time_step_size,
+    )

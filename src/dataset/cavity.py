@@ -34,7 +34,7 @@ def load_case_data(case_dir: Path) -> Tuple[np.ndarray, Dict[str, float]]:
     return features, case_params
 
 
-class CavityDataset(CfdDataset):
+class CavityFlowDataset(CfdDataset):
     """
     Auto-regressive dataset for Lid-driven cavity flow problem.
 
@@ -209,7 +209,7 @@ class CavityDataset(CfdDataset):
             return num_frames
 
 
-class CavityAutoDataset(CfdAutoDataset):
+class CavityFlowAutoDataset(CfdAutoDataset):
     """
     Auto-regressive dataset for Lid-driven cavity flow problem.
 
@@ -340,7 +340,7 @@ def get_cavity_datasets(
     norm_props: bool,
     norm_bc: bool,
     seed: int = 0,
-) -> Tuple[CavityDataset, CavityDataset, CavityDataset]:
+) -> Tuple[CavityFlowDataset, CavityFlowDataset, CavityFlowDataset]:
     """
     Returns: (train_data, dev_data, test_data)
     """
@@ -362,9 +362,9 @@ def get_cavity_datasets(
     train_case_dirs = case_dirs[:num_train]
     dev_case_dirs = case_dirs[num_train : num_train + num_dev]
     test_case_dirs = case_dirs[num_train + num_dev :]
-    train_data = CavityDataset(train_case_dirs, norm_props=norm_props, norm_bc=norm_bc)
-    dev_data = CavityDataset(dev_case_dirs, norm_props=norm_props, norm_bc=norm_bc)
-    test_data = CavityDataset(test_case_dirs, norm_props=norm_props, norm_bc=norm_bc)
+    train_data = CavityFlowDataset(train_case_dirs, norm_props=norm_props, norm_bc=norm_bc)
+    dev_data = CavityFlowDataset(dev_case_dirs, norm_props=norm_props, norm_bc=norm_bc)
+    test_data = CavityFlowDataset(test_case_dirs, norm_props=norm_props, norm_bc=norm_bc)
     return train_data, dev_data, test_data
 
 
@@ -413,9 +413,9 @@ def get_cavity_auto_datasets(
         norm_props=norm_props,
         norm_bc=norm_bc,
     )
-    train_data = CavityAutoDataset(train_case_dirs, **kwargs)
-    dev_data = CavityAutoDataset(dev_case_dirs, **kwargs)
-    test_data = CavityAutoDataset(test_case_dirs, **kwargs)
+    train_data = CavityFlowAutoDataset(train_case_dirs, **kwargs)
+    dev_data = CavityFlowAutoDataset(dev_case_dirs, **kwargs)
+    test_data = CavityFlowAutoDataset(test_case_dirs, **kwargs)
     return train_data, dev_data, test_data
 
 

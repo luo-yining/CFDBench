@@ -97,7 +97,7 @@ def load_case_data(case_dir: Path) -> Tuple[np.ndarray, Dict[str, float]]:
     return features, case_params
 
 
-class DamDataset(CfdDataset):
+class DamFlowDataset(CfdDataset):
     """
     Dataset for Dam flow problem.
 
@@ -208,7 +208,7 @@ class DamDataset(CfdDataset):
         return self.num_frames_before[-1]
 
 
-class DamAutoDataset(CfdAutoDataset):
+class DamFlowAutoDataset(CfdAutoDataset):
     """
     Dataset for Dam flow problem.
 
@@ -317,7 +317,7 @@ def get_dam_datasets(
     norm_props: bool,
     norm_bc: bool,
     seed: int = 0,
-) -> Tuple[DamDataset, DamDataset, DamDataset]:
+) -> Tuple[DamFlowDataset, DamFlowDataset, DamFlowDataset]:
     """
     Returns: (train_data, dev_data, test_data)
     """
@@ -339,9 +339,9 @@ def get_dam_datasets(
     train_case_dirs = case_dirs[:num_train]
     dev_case_dirs = case_dirs[num_train : num_train + num_dev]
     test_case_dirs = case_dirs[num_train + num_dev :]
-    train_data = DamDataset(train_case_dirs, norm_props=norm_props, norm_bc=norm_bc)
-    dev_data = DamDataset(dev_case_dirs, norm_props=norm_props, norm_bc=norm_bc)
-    test_data = DamDataset(test_case_dirs, norm_props=norm_props, norm_bc=norm_bc)
+    train_data = DamFlowDataset(train_case_dirs, norm_props=norm_props, norm_bc=norm_bc)
+    dev_data = DamFlowDataset(dev_case_dirs, norm_props=norm_props, norm_bc=norm_bc)
+    test_data = DamFlowDataset(test_case_dirs, norm_props=norm_props, norm_bc=norm_bc)
     return train_data, dev_data, test_data
 
 
@@ -353,7 +353,7 @@ def get_dam_auto_datasets(
     delta_time: float = 0.1,
     stable_state_diff: float = 0.001,
     seed: int = 0,
-) -> Tuple[DamAutoDataset, DamAutoDataset, DamAutoDataset]:
+) -> Tuple[DamFlowAutoDataset, DamFlowAutoDataset, DamFlowAutoDataset]:
     print(data_dir, case_name)
     case_dirs = []
     for name in ["prop", "bc", "geo"]:
@@ -388,13 +388,13 @@ def get_dam_auto_datasets(
         norm_props=norm_props,
         norm_bc=norm_bc,
     )
-    train_data = DamAutoDataset(train_case_dirs, **kwargs)
-    dev_data = DamAutoDataset(dev_case_dirs, **kwargs)
-    test_data = DamAutoDataset(test_case_dirs, **kwargs)
+    train_data = DamFlowAutoDataset(train_case_dirs, **kwargs)
+    dev_data = DamFlowAutoDataset(dev_case_dirs, **kwargs)
+    test_data = DamFlowAutoDataset(test_case_dirs, **kwargs)
     return train_data, dev_data, test_data
 
 
 if __name__ == "__main__":
     data_dir = Path("../data/dam/prop")
-    dataset = DamDataset([data_dir], norm_props=True, norm_bc=True)
+    dataset = DamFlowDataset([data_dir], norm_props=True, norm_bc=True)
     print(dataset[1])

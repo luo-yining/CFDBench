@@ -3,6 +3,8 @@
 The code for the paper: [[upcoming] CFDBench: a comprehensive benchmark for data-driven methods for fluid dynamics](www.unknown.com).
 ## Data
 
+The data is first generated with numerical algorithms, then interpolated to a grid of 64x64. The raw data before interpolation is very large, and the below link is the interpolated data.
+
 Main download link: [[upcoming]](www.unknown.com)
 
 Contains 4 problems:

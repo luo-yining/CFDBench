@@ -1,3 +1,5 @@
+from typing import Tuple
+
 from models.resnet import ResNet
 from models.unet import UNet
 from models.base_model import AutoCfdModel
@@ -10,8 +12,12 @@ from models.loss import loss_name_to_fn
 from args import Args
 
 
-def get_input_shapes(args: Args):
-    if any(x in args.data_name for x in ["tube", "dam", "dam"]):
+def get_input_shapes(args: Args) -> Tuple[int, int, int]:
+    """
+    Returns the number of rows, columns, and case parameters depending on the
+    `data_name`, `num_rows` and `num_cols` attributes of `args`.
+    """
+    if any(x in args.data_name for x in ["tube", "dam", "cylinder"]):
         n_rows = args.num_rows + 2  # Top and bottom boundaries
         n_cols = args.num_cols + 1  # Left boundary
     else:

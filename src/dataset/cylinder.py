@@ -72,9 +72,9 @@ def load_case_data(case_dir: Path) -> Tuple[np.ndarray, Dict[str, float]]:
     return features, case_params
 
 
-class KarmanDataset(CfdDataset):
+class CylinderFlowDataset(CfdDataset):
     """
-    Dataset for Laminar flow problem.
+    Dataset for Cylinder flow problem.
 
     Varying density and viscosity and inlet velocity for each case (3 variables).
     """
@@ -193,7 +193,7 @@ class KarmanDataset(CfdDataset):
         return self.num_frames_before[-1]
 
 
-class KarmanAutoDataset(CfdAutoDataset):
+class CylinderFlowAutoDataset(CfdAutoDataset):
     """
     Dataset for Laminar flow problem.
 
@@ -306,7 +306,7 @@ class KarmanAutoDataset(CfdAutoDataset):
         return len(self.inputs)
 
 
-def get_karman_datasets(
+def get_cylinder_datasets(
     data_dir: Path,
     case_name: str,
     norm_props: bool,
@@ -346,13 +346,13 @@ def get_karman_datasets(
         norm_props=norm_props,
         norm_bc=norm_bc,
     )
-    train_data = KarmanDataset(train_case_dirs, **kwargs)
-    dev_data = KarmanDataset(dev_case_dirs, **kwargs)
-    test_data = KarmanDataset(test_case_dirs, **kwargs)
+    train_data = CylinderFlowDataset(train_case_dirs, **kwargs)
+    dev_data = CylinderFlowDataset(dev_case_dirs, **kwargs)
+    test_data = CylinderFlowDataset(test_case_dirs, **kwargs)
     return train_data, dev_data, test_data
 
 
-def get_karman_auto_datasets(
+def get_cylinder_auto_datasets(
     data_dir: Path,
     case_name: str,
     norm_props: bool,
@@ -360,7 +360,7 @@ def get_karman_auto_datasets(
     delta_time: float = 0.01,
     stable_state_diff: float = 0.001,
     seed: int = 0,
-) -> Tuple[KarmanAutoDataset, KarmanAutoDataset, KarmanAutoDataset]:
+) -> Tuple[CylinderFlowAutoDataset, CylinderFlowAutoDataset, CylinderFlowAutoDataset]:
     print(data_dir, case_name)
     case_dirs = []
     for name in ["prop", "bc", "geo"]:
@@ -396,14 +396,14 @@ def get_karman_auto_datasets(
         norm_props=norm_props,
         norm_bc=norm_bc,
     )
-    train_data = KarmanAutoDataset(train_case_dirs, **kwargs)
-    dev_data = KarmanAutoDataset(dev_case_dirs, **kwargs)
-    test_data = KarmanAutoDataset(test_case_dirs, **kwargs)
+    train_data = CylinderFlowAutoDataset(train_case_dirs, **kwargs)
+    dev_data = CylinderFlowAutoDataset(dev_case_dirs, **kwargs)
+    test_data = CylinderFlowAutoDataset(test_case_dirs, **kwargs)
     return train_data, dev_data, test_data
 
 
 if __name__ == "__main__":
     data_dir = Path("../data/poiseuille/case0")
     time_step_size = 10
-    dataset = KarmanDataset([data_dir], norm_props=True, norm_bc=True)
+    dataset = CylinderFlowDataset([data_dir], norm_props=True, norm_bc=True)
     exit()
