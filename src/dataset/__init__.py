@@ -107,7 +107,7 @@ def get_auto_dataset(
     elif problem_name == 'cylinder':
         train_data, dev_data, test_data = get_cylinder_auto_datasets(
             data_dir / problem_name,
-            case_name=subset_name,
+            subset_name=subset_name,
             norm_props=norm_props,
             norm_bc=norm_bc,
             delta_time=delta_time,

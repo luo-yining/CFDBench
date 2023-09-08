@@ -105,7 +105,7 @@ def evaluate(
 
     if measure_time:
         print("Memory usage:")
-        print(torch.cuda.memory_summary('cuda'))
+        print(torch.cuda.memory_summary("cuda"))
         print("Time usage:")
         time_per_step = 1000 * (time.time() - start_time) / len(loader)
         print(f"Time per step: {time_per_step:.3f} ms")
@@ -216,7 +216,7 @@ def train(
 
         if measure_time:
             print("Memory usage:")
-            print(torch.cuda.memory_summary('cuda'))
+            print(torch.cuda.memory_summary("cuda"))
             print("Time usage:")
             print(time.time() - ep_start_time)
             exit()
@@ -257,18 +257,18 @@ def train(
 
 
 def init_model(args: Args):
-    print(f"initting {args.model}")
+    print(f"Initting {args.model}")
     loss_fn = loss_name_to_fn(args.loss_name)
+    query_coord_dim = 3  # (t, x, y)
+    if "cylinder" in args.data_name:
+        # (density, viscosity, u_top, h, w, radius, center_x, center_y)
+        n_case_params = 8
+    else:
+        n_case_params = 5  # (density, viscosity, u_top, h, w)
     if args.model == "deeponet":
-        if "karman" in args.data_name:
-            # (density, viscosity, u_top, h, w, radius, center_x, center_y)
-            branch_dim = 8
-        else:
-            branch_dim = 5  # (density, viscosity, u_top, h, w)
-        trunk_dim = 3  # (t, x, y)
         model = DeepONet(
-            branch_dim=branch_dim,
-            trunk_dim=trunk_dim,
+            branch_dim=n_case_params,
+            trunk_dim=query_coord_dim,
             loss_fn=loss_fn,
             width=args.deeponet_width,
             trunk_depth=args.trunk_depth,
@@ -278,13 +278,9 @@ def init_model(args: Args):
             act_on_output=bool(args.act_on_output),
         ).cuda()
     elif args.model == "ffn":
-        if "karman" in args.data_name:
-            # (density, viscosity, u_top, h, w, radius, center_x, center_y)
-            branch_dim = 8
-        else:
-            branch_dim = 5  # (density, viscosity, u_top, h, w)
-        trunk_dim = 3  # (t, x, y)
-        widths = [branch_dim + trunk_dim] + [args.ffn_width] * args.ffn_depth + [1]
+        widths = (
+            [n_case_params + query_coord_dim] + [args.ffn_width] * args.ffn_depth + [1]
+        )
         model = FfnModel(
             widths=widths,
             loss_fn=loss_fn,
