@@ -36,7 +36,8 @@ The directory tree for the datasets:
         ► case0001/
     ► geo/
     ► prop/
-► laminar/
+► tube/
+► dam/
 ► cylinder/
 ```
 

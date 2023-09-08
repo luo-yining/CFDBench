@@ -152,45 +152,52 @@ class AutoDeepONet(AutoCfdModel):
         preds = preds.view(-1, 1, height, width)  # (b, 1, h, w)
         return dict(preds=preds)
 
-    def generate(self, x: Tensor, case_params: Tensor) -> Tensor:
+    def generate(self, inputs: Tensor, case_params: Tensor, mask: Tensor) -> Tensor:
         """
         x: (c, h, w) or (B, c, h, w)
 
         Returns:
             (b, c, h, w)
         """
-        if x.dim() == 3:
-            x = x.unsqueeze(0)  # (1, c, h, w)
-        batch_size, num_chan, height, width = x.shape
+        if inputs.dim() == 3:
+            inputs = inputs.unsqueeze(0)  # (1, c, h, w)
+        batch_size, num_chan, height, width = inputs.shape
         query_idxs = torch.tensor(
             list(product(range(height), range(width))),
             dtype=torch.long,
-            device=x.device,
+            device=inputs.device,
         )  # (h * w, 2)
         # query_points = query_points / 100
         # (b, 1, h * w)
-        preds = self.forward(x, case_params=case_params, query_idxs=query_idxs)["preds"]
+        preds = self.forward(
+            inputs, case_params=case_params, query_idxs=query_idxs, mask=mask
+        )["preds"]
         preds = preds.view(-1, 1, height, width)  # (b, 1, h, w)
         return preds
 
-    def generate_many(self, x: Tensor, case_params: Tensor, steps: int) -> List[Tensor]:
+    def generate_many(
+        self, inputs: Tensor, case_params: Tensor, mask: Tensor, steps: int
+    ) -> List[Tensor]:
         """
-        x: (c, h, w) or (B, c, h, w)
-        mask: (h, w). 1 for interior, 0 for boundaries.
-        steps: int, number of steps to generate.
-
-        Returns:
-            list of tensors, each of shape (b, c, h, w)
+                x: (c, h, w) or (B, c, h, w)
+                mask: (h, w). 1 for interior, 0 for boundaries.
+                steps: int, number of steps to generate.
+        F
+                Returns:
+                    list of tensors, each of shape (b, c, h, w)
         """
-        assert len(x.shape) == len(case_params.shape) + 2
-        if x.dim() == 3:
-            x = x.unsqueeze(0)  # (1, c, h, w)
+        assert len(inputs.shape) == len(case_params.shape) + 2
+        if inputs.dim() == 3:
+            inputs = inputs.unsqueeze(0)  # (1, c, h, w)
             case_params = case_params.unsqueeze(0)  # (1, p)
-        assert x.shape[0] == case_params.shape[0]
-        cur_frame = x
+            mask = mask.unsqueeze(0)    # (1, h, w)
+        assert inputs.shape[0] == case_params.shape[0]
+        cur_frame = inputs
         preds = []
         for _ in range(steps):
             # (b, c, h, w)
-            cur_frame = self.generate(cur_frame, case_params=case_params)
+            cur_frame = self.generate(
+                inputs=cur_frame, case_params=case_params, mask=None
+            )
             preds.append(cur_frame)
         return preds

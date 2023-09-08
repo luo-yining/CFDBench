@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 import torch
@@ -14,18 +14,23 @@ from models.base_model import AutoCfdModel
 from utils_auto import init_model
 
 
-def plot_metrics(metrics: List[dict]):
+def plot_metrics(metrics: List[dict], out_path: Optional[Path] = None):
     metrics = np.array(metrics)
     for key in ["nmse", "mse", "mae"]:
         values = [x[key] for x in metrics]
         plt.plot(values, label=key.upper())
     plt.legend()
     plt.xlabel("Steps")
-    plt.show()
+    plt.yscale('log')
+    # plt.title("Temporal extrapolation of Auto-DeepONet")
+    if out_path is None:
+        plt.show()
+    else:
+        plt.savefig(out_path, bbox_inches="tight")
 
 
 def get_metrics(preds: Tensor, labels: Tensor):
-    assert preds.shape == labels.shape
+    assert preds.shape == labels.shape, f"{preds.shape}, {labels.shape}"
     mse = ((preds - labels) ** 2).mean().detach().cpu().item()
     nmse = mse / ((labels**2).mean()).detach().cpu().item()
     mae = F.l1_loss(preds, labels).detach().cpu().item()
@@ -82,12 +87,18 @@ def infer(
     for step in range(infer_steps):
         step_metrics = []
         for case_id in range(n_cases):
+            # The last channel is mask
             case_features = all_features[case_id][step]  # (c + 1, h, w)
             case_pred = all_preds[case_id][step]  # (b, c, h, w)
             # Assume `all_preds` has a batch size of 1
+
             preds = case_pred[0]  # (c, h, w)
             label = case_features[:-1]  # (c, h, w)
             mask = case_features[-1]  # (h, w)
+
+            # Only compute the metrics for the u component
+            preds = preds[0]
+            label = label[0]
 
             preds = preds * mask  # (c, h, w)
             label = label * mask  # (c, h, w)
@@ -138,6 +149,7 @@ def main():
     print("====== Start inference ======")
     all_metrics = infer(model, all_features, all_case_params, infer_steps)
     dump_json(all_metrics, output_dir / "multistep_metrics.json")
+    plot_metrics(all_metrics, output_dir / 'multistep_metrics.pdf')
 
 
 if __name__ == "__main__":

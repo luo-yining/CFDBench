@@ -1,5 +1,5 @@
 from itertools import product
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 import torch
 from torch import nn, Tensor
@@ -131,8 +131,9 @@ class AutoEDeepONet(AutoCfdModel):
 
     def generate(
         self,
-        x: Tensor,
+        inputs: Tensor,
         case_params: Tensor,
+        mask: Optional[Tensor] = None,
     ) -> Tensor:
         """
         Generate one frame at time t.
@@ -147,16 +148,43 @@ class AutoEDeepONet(AutoCfdModel):
         Returns:
             (b, c, h, w)
         """
-        batch_size, num_chan, height, width = x.shape
+        batch_size, num_chan, height, width = inputs.shape
         # Create 2D lattice of query points to infer the frame.
         query_idxs = torch.tensor(
             list(product(range(height), range(width))),
             dtype=torch.long,
-            device=x.device,
+            device=inputs.device,
         )  # (h * w, 2)
         # (b, 1, h * w)
-        preds = self.forward(inputs=x, case_params=case_params, query_idxs=query_idxs)[
-            "preds"
-        ]
+        preds = self.forward(
+            inputs=inputs, case_params=case_params, query_idxs=query_idxs
+        )["preds"]
         preds = preds.view(-1, 1, height, width)  # (b, 1, h, w)
+        return preds
+
+    def generate_many(
+        self, inputs: Tensor, case_params: Tensor, mask: Tensor, steps: int
+    ) -> List[Tensor]:
+        """
+                x: (c, h, w) or (B, c, h, w)
+                mask: (h, w). 1 for interior, 0 for boundaries.
+                steps: int, number of steps to generate.
+        F
+                Returns:
+                    list of tensors, each of shape (b, c, h, w)
+        """
+        assert len(inputs.shape) == len(case_params.shape) + 2
+        if inputs.dim() == 3:
+            inputs = inputs.unsqueeze(0)  # (1, c, h, w)
+            case_params = case_params.unsqueeze(0)  # (1, p)
+            mask = mask.unsqueeze(0)  # (1, h, w)
+        assert inputs.shape[0] == case_params.shape[0]
+        cur_frame = inputs
+        preds = []
+        for _ in range(steps):
+            # (b, c, h, w)
+            cur_frame = self.generate(
+                inputs=cur_frame, case_params=case_params, mask=None
+            )
+            preds.append(cur_frame)
         return preds
