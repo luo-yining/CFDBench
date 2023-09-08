@@ -120,7 +120,7 @@ class CavityFlowDataset(CfdDataset):
             if self.norm_props:
                 normalize_physics_props(this_case_params)
             if self.norm_bc:
-                normalize_bc(this_case_params, 'vel_top')
+                normalize_bc(this_case_params, "vel_top")
 
             T, c, h, w = this_case_features.shape
             self.num_features += T * h * w
@@ -289,7 +289,7 @@ class CavityFlowAutoDataset(CfdAutoDataset):
             if self.norm_props:
                 normalize_physics_props(this_case_params)
             if self.norm_bc:
-                normalize_bc(this_case_params, 'vel_top')
+                normalize_bc(this_case_params, "vel_top")
 
             self.case_params.append(this_case_params)
             num_steps = len(outputs)
@@ -308,11 +308,11 @@ class CavityFlowAutoDataset(CfdAutoDataset):
                     break
                 assert not torch.isnan(inp).any()
                 assert not torch.isnan(out).any()
-                all_inputs.append(inp)      # (3, h, w)
-                all_labels.append(out)      # (3, h, w)
+                all_inputs.append(inp)  # (3, h, w)
+                all_labels.append(out)  # (3, h, w)
                 all_case_ids.append(case_id)
-        self.inputs = torch.stack(all_inputs)   # (# cases, 3, h, w)
-        self.labels = torch.stack(all_labels)   # (# cases, 3, h, w)
+        self.inputs = torch.stack(all_inputs)  # (# cases, 3, h, w)
+        self.labels = torch.stack(all_labels)  # (# cases, 3, h, w)
         self.case_ids = np.array(all_case_ids)  # (# cases,)
 
     def __getitem__(self, idx: int) -> Tuple[Tensor, Tensor, Dict[str, Tensor]]:
@@ -364,9 +364,13 @@ def get_cavity_datasets(
     train_case_dirs = case_dirs[:num_train]
     dev_case_dirs = case_dirs[num_train : num_train + num_dev]
     test_case_dirs = case_dirs[num_train + num_dev :]
-    train_data = CavityFlowDataset(train_case_dirs, norm_props=norm_props, norm_bc=norm_bc)
+    train_data = CavityFlowDataset(
+        train_case_dirs, norm_props=norm_props, norm_bc=norm_bc
+    )
     dev_data = CavityFlowDataset(dev_case_dirs, norm_props=norm_props, norm_bc=norm_bc)
-    test_data = CavityFlowDataset(test_case_dirs, norm_props=norm_props, norm_bc=norm_bc)
+    test_data = CavityFlowDataset(
+        test_case_dirs, norm_props=norm_props, norm_bc=norm_bc
+    )
     return train_data, dev_data, test_data
 
 
