@@ -1,9 +1,16 @@
 # CFDBench
 
 The code for the paper: [[upcoming] CFDBench: a comprehensive benchmark for data-driven methods for fluid dynamics](www.unknown.com).
-## Data
 
-The data is first generated with numerical algorithms, then interpolated to a grid of 64x64. The raw data before interpolation is very large, and the below link is the interpolated data.
+## Data Generation
+
+The directory `generation-code` contains the code for creating the mesh (ICEM code) and the schema code for batch generation in ANSYS Fluent.
+
+> This part takes a lot of time, and you are better just using our generated data instead.
+
+## Data Interpolation
+
+After generating data with numerical algorithms, it is then interpolated to a grid of 64x64. The raw data before interpolation is very large, and the below link is the interpolated data.
 
 Main download link: [[click here]](https://cloud.tsinghua.edu.cn/d/435413b55dea434297d1/)
 
