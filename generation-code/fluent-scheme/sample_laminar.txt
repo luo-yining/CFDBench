@@ -1,0 +1,27 @@
+(ti-menu-load-string "define/materials/change-create/water water yes constant {density} no no yes constant {viscosity} no no no")
+
+(ti-menu-load-string "define/boundary-conditions/velocity-inlet inlet mixture no no yes yes no {velocity} no 0")
+
+(ti-menu-load-string "solve/initialize/ set-defaults/mixture/pressure 0")
+(ti-menu-load-string "solve/initialize/ set-defaults/mixture/x-velocity 0")
+(ti-menu-load-string "solve/initialize/ set-defaults/mixture/y-velocity 0")
+(ti-menu-load-string "solve/initialize/ set-defaults/phase-air/mp 1")
+(ti-menu-load-string "solve/initialize/initialize-flow")
+
+(ti-menu-load-string "file/transient-export/delete {old_var}")
+(ti-menu-load-string "file/transient-export ascii {path_file} inlet int_fluid outlet wall () x-velocity-water y-velocity-water volume-fraction-water () no no {new_var} flow-time 0.01 time-step")
+
+(ti-menu-load-string "solve/set/transient-controls time-step-size 0.01")
+
+(ti-menu-load-string "file/write-case {save_path}\{case_name}") 
+(ti-menu-load-string "solve/dual-time-iterate {num_time_steps} 20") 
+(ti-menu-load-string "file/write-data {save_path}\{data_name}") 
+
+(ti-menu-load-string "display/objects/display contour-u-water") 
+(ti-menu-load-string "display/save-picture {save_path}\u_x.png") 
+(ti-menu-load-string "plot/residuals yes yes yes yes yes") 
+(ti-menu-load-string "display/save-picture {save_path}\residuals.png") 
+(ti-menu-load-string "solve/report-plots/plot u-a-rplot ()") 
+(ti-menu-load-string "display/save-picture {save_path}\monitor_u_a.png")
+(ti-menu-load-string "solve/report-plots/plot u-water-outlet-rplot ()") 
+(ti-menu-load-string "display/save-picture {save_path}\monitor_u_out.png")

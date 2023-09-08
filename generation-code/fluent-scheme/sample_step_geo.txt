@@ -1,0 +1,26 @@
+(ti-menu-load-string "mesh replace {mesh}")
+
+(ti-menu-load-string "file/transient-export/delete {old_var}")
+(ti-menu-load-string "file/transient-export ascii {path_file} inlet_pressure inlet_velocity int_fluid outlet wall_bottom wall_top () x-velocity y-velocity water-vof () no no {new_var} flow-time 0.1 time-step")
+
+(ti-menu-load-string "solve/initialize/ set-defaults/mixture/pressure 0")
+(ti-menu-load-string "solve/initialize/ set-defaults/mixture/x-velocity 0")
+(ti-menu-load-string "solve/initialize/ set-defaults/mixture/y-velocity 0")
+(ti-menu-load-string "solve/initialize/ set-defaults/water/mp 0")
+(ti-menu-load-string "solve/initialize/initialize-flow")
+(ti-menu-load-string "solve/patch/mixture/ () region_0 () x-velocity y n 1.0")
+(ti-menu-load-string "solve/patch/water/ () region_0 () mp n 1.0")
+
+
+(ti-menu-load-string "file/write-case {save_path}\{case_name}") 
+(ti-menu-load-string "solve/dual-time-iterate 100 80") 
+(ti-menu-load-string "file/write-data {save_path}\{data_name}") 
+
+(ti-menu-load-string "display/objects/display contour-u")
+(ti-menu-load-string "display/save-picture {save_path}\u.png")
+(ti-menu-load-string "plot/residuals yes yes yes yes yes")
+(ti-menu-load-string "display/save-picture {save_path}\residuals.png")
+(ti-menu-load-string "display/objects/display contour-liquid-frac")
+(ti-menu-load-string "display/save-picture {save_path}\vof.png")
+(ti-menu-load-string "solve/report-plots/plot report-def-u-ave-rplot ()")
+(ti-menu-load-string "display/save-picture {save_path}\monitor_ua.png")
