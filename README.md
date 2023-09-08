@@ -5,7 +5,7 @@ The code for the paper: [[upcoming] CFDBench: a comprehensive benchmark for data
 
 The data is first generated with numerical algorithms, then interpolated to a grid of 64x64. The raw data before interpolation is very large, and the below link is the interpolated data.
 
-Main download link: [[upcoming]](www.unknown.com)
+Main download link: [[click here]](https://cloud.tsinghua.edu.cn/d/435413b55dea434297d1/)
 
 Contains 4 problems:
 
@@ -13,6 +13,8 @@ Contains 4 problems:
 - `tube`: Flow through a circular tube
 - `dam`: Flow over a dam
 - `cylinder`: Flow around a cylinder
+
+> The cylinder flow is separated into three files because the file size exceeds the upload limit.
 
 Each dataset includes 3 subsets, corresponding to changing BCs, domain geometries and physical properties.
 
