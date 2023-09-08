@@ -106,7 +106,6 @@ def main():
     # Load data
     data_dir = Path(args.data_dir)
     _, _, test_data = get_auto_dataset(
-        # args.data_name,
         data_dir=data_dir,
         data_name=args.data_name,
         delta_time=args.delta_time,

@@ -6,7 +6,7 @@ The code for the paper: [[upcoming] CFDBench: a comprehensive benchmark for data
 
 The directory `generation-code` contains the code for creating the mesh (ICEM code) and the schema code for batch generation in ANSYS Fluent.
 
-> This part takes a lot of time, and you are better just using our generated data instead.
+> This part takes a lot of time, and you are better off just using our generated data instead.
 
 ## Data Interpolation
 
