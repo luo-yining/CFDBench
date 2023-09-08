@@ -59,20 +59,22 @@ class AutoCfdModel(nn.Module):
 
     def generate(
         self,
-        x: Tensor,
-        steps: int,
+        inputs: Tensor,
+        case_params: Tensor,
+        mask: Tensor,
         **kwargs,
     ) -> Tensor:
-        """
-        Given a frame `x`, generate the next `steps` frames.
-        """
         raise NotImplementedError
-    
+
     def generate_many(
         self,
         x: Tensor,
         case_params: Tensor,
+        mask: Tensor,
         steps: int,
         **kwargs,
     ):
+        """
+        Given a frame `inputs`, generate the next `steps` frames.
+        """
         raise NotImplementedError

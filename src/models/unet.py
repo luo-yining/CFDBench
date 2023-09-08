@@ -214,33 +214,32 @@ class UNet(AutoCfdModel):
         self, inputs: Tensor, case_params: Tensor, mask: Tensor, steps: int
     ) -> List[Tensor]:
         """
+        Generate multiple steps of the solution autoregressively.
+
         x: (c, h, w) or (B, c, h, w)
         mask: (h, w). 1 for interior, 0 for boundaries.
 
         Returns:
             (steps, c, h, w)
         """
-        frames = []
-        if x.dim() == 3:
-            x = x.unsqueeze(0)  # (1, c, h, w)
-        cur_frame = x
-        boundaries = (1 - mask) * x
+        preds = []
+        if inputs.dim() == 3:
+            # Add dim for batch size
+            inputs = inputs.unsqueeze(0)  # (1, c, h, w)
+            case_params = case_params.unsqueeze(0)
+            mask = mask.unsqueeze(0)
+        cur_frame = inputs  # (b, c, h, w)
+        boundaries = (1 - mask) * inputs
         mask = mask.unsqueeze(0)
         for _ in range(steps):
-            outputs = self.generate(cur_frame, case_params=case_params, mask=mask)
-            next_frame = torch.cat([outputs[:, :2], cur_frame[:, 2:]], dim=1)
-            print(cur_frame.shape)
-            print(next_frame.shape)
-            exit()
-            cur_frame = next_frame * mask + boundaries
-            frames.append(cur_frame.squeeze(0))
-        return frames
+            # (b, c, h, w)
+            cur_frame = self.generate(cur_frame, case_params=case_params, mask=mask)
+            preds.append(cur_frame)
+        return preds
 
     def generate(self, inputs: Tensor, case_params: Tensor, mask: Tensor) -> Tensor:
         # print(x.shape)
         # print(mask.shape)
         outputs = self.forward(inputs, case_params=case_params, mask=mask)
         preds = outputs["preds"]
-        u = preds[:, 0]
-        # v = preds[:, 1]
-        return u
+        return preds

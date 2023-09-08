@@ -5,18 +5,30 @@ import numpy as np
 import torch
 from torch import Tensor, FloatTensor
 from torch.nn import functional as F
+import matplotlib.pyplot as plt
 
 from args import Args
-from utils import load_best_ckpt, get_output_dir
+from utils import load_best_ckpt, get_output_dir, dump_json
 from dataset import get_auto_dataset
 from models.base_model import AutoCfdModel
 from utils_auto import init_model
 
 
+def plot_metrics(metrics: List[dict]):
+    metrics = np.array(metrics)
+    for key in ["nmse", "mse", "mae"]:
+        values = [x[key] for x in metrics]
+        plt.plot(values, label=key.upper())
+    plt.legend()
+    plt.xlabel("Steps")
+    plt.show()
+
+
 def get_metrics(preds: Tensor, labels: Tensor):
-    mse = ((preds - labels) ** 2).mean()
-    nmse = mse / ((labels**2).mean())
-    mae = F.l1_loss(preds, labels)
+    assert preds.shape == labels.shape
+    mse = ((preds - labels) ** 2).mean().detach().cpu().item()
+    nmse = mse / ((labels**2).mean()).detach().cpu().item()
+    mae = F.l1_loss(preds, labels).detach().cpu().item()
     return dict(
         mse=mse,
         nmse=nmse,
@@ -34,7 +46,6 @@ def case_params_to_tensor(case_params: dict):
 
 def combine_dicts(dicts: List[dict]) -> dict:
     result = {}
-    print(dicts)
     for key in dicts[0]:
         result[key] = np.mean([d[key] for d in dicts])
     return result
@@ -43,8 +54,14 @@ def combine_dicts(dicts: List[dict]) -> dict:
 def infer_case(
     model: AutoCfdModel, case_features: Tensor, case_params: Tensor, infer_steps: int
 ):
-    start_frame = case_features[0]
-    preds = model.generate_many(start_frame, case_params, infer_steps)
+    start_frame = case_features[0, :-1]
+    mask = case_features[0, -1]
+    preds = model.generate_many(
+        inputs=start_frame,
+        case_params=case_params,
+        mask=mask,
+        steps=infer_steps,
+    )
     return preds
 
 
@@ -52,36 +69,41 @@ def infer(
     model, all_features: List[Tensor], all_case_params: List[Tensor], infer_steps: int
 ):
     n_cases = len(all_features)
-    print(n_cases)
     all_preds = []
-    for case_id, (case_features, case_params) in enumerate(
-        zip(all_features, all_case_params)
-    ):
+    for case_id in range(n_cases):
+        case_features = all_features[case_id]
+        case_params = all_case_params[case_id]
+        # (steps, c, h, w)
         case_pred = infer_case(model, case_features, case_params, infer_steps)
         all_preds.append(case_pred)
 
     # Compute metrics
     all_metrics = []
     for step in range(infer_steps):
+        step_metrics = []
         for case_id in range(n_cases):
-            case_features = all_features[case_id, step]
-            case_pred = all_preds[case_id, step]
-            print(case_features.shape, case_pred.shape)
-            exit()
-            mask = case_features[:, 2]
-            case_pred = case_pred * mask
-            case_features = case_features[:, :2] * mask
-            metrics = get_metrics(case_pred, case_features)
-            all_metrics.append(metrics)
-        metrics = combine_dicts(all_metrics)
+            case_features = all_features[case_id][step]  # (c + 1, h, w)
+            case_pred = all_preds[case_id][step]  # (b, c, h, w)
+            # Assume `all_preds` has a batch size of 1
+            preds = case_pred[0]  # (c, h, w)
+            label = case_features[:-1]  # (c, h, w)
+            mask = case_features[-1]  # (h, w)
+
+            preds = preds * mask  # (c, h, w)
+            label = label * mask  # (c, h, w)
+            metrics = get_metrics(preds, label)
+            step_metrics.append(metrics)
+        metrics = combine_dicts(step_metrics)
         print(metrics)
-    return metrics
+        all_metrics.append(metrics)
+    return all_metrics
 
 
 def main():
     args = Args().parse_args()
-
     print(args)
+
+    # Load data
     data_dir = Path(args.data_dir)
     _, _, test_data = get_auto_dataset(
         # args.data_name,
@@ -91,13 +113,9 @@ def main():
         norm_props=bool(args.norm_props),
         norm_bc=bool(args.norm_bc),
     )
-    print(test_data.case_dirs)
-    infer_steps = 10
-
+    infer_steps = 20
     all_features = test_data.all_features
     all_case_params = test_data.case_params
-    print(all_case_params)
-    print(all_features)
 
     # Make sure each case has at least `infer_steps` steps by repeating
     # the last frame. This is because we assume that flow has
@@ -107,11 +125,11 @@ def main():
         while num_frames < infer_steps:
             case_features = np.concatenate([case_features, case_features[-1:]], axis=0)
             num_frames += 1
-        all_features[case_id] = FloatTensor(case_features).to('cuda')
+        all_features[case_id] = FloatTensor(case_features).to("cuda")
 
     # Turn case params into tensors
     for case_id, case_params in enumerate(all_case_params):
-        all_case_params[case_id] = case_params_to_tensor(case_params).to('cuda')
+        all_case_params[case_id] = case_params_to_tensor(case_params).to("cuda")
 
     # Load model
     model = init_model(args)
@@ -119,7 +137,8 @@ def main():
     load_best_ckpt(model, output_dir)
 
     print("====== Start inference ======")
-    infer(model, all_features, all_case_params, infer_steps)
+    all_metrics = infer(model, all_features, all_case_params, infer_steps)
+    dump_json(all_metrics, output_dir / "multistep_metrics.json")
 
 
 if __name__ == "__main__":
