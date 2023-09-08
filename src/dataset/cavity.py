@@ -110,7 +110,8 @@ class CavityFlowDataset(CfdDataset):
         self.num_features = 0
         self.num_frames: List[int] = []
         features: List[Tensor] = []
-        case_ids: List[int] = []  # 每个样本对应的case的id
+        case_ids: List[int] = []  # The case ID of each example
+        self.all_features = List[np.ndarray] = []
 
         # Loop each frame in each case, create features labels
         for case_id, case_dir in enumerate(tqdm(case_dirs)):
@@ -127,6 +128,7 @@ class CavityFlowDataset(CfdDataset):
                 [this_case_params[key] for key in self.case_params_keys],
                 dtype=torch.float32,
             )
+            self.all_features.append(this_case_features)
             self.case_params.append(params_tensor)
             features.append(torch.tensor(this_case_features, dtype=torch.float32))
             case_ids.append(case_id)

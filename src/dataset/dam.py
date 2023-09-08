@@ -1,4 +1,4 @@
-'''
+"""
 The setting of this problem or datset is as follows.
 
         ----------------------------
@@ -26,7 +26,7 @@ case_params = {
   "dx": 0.0234375,
   "dy": 0.00625
 }
-'''
+"""
 from pathlib import Path
 from typing import Tuple, List, Dict, Any
 import random
@@ -92,7 +92,7 @@ def load_case_data(case_dir: Path) -> Tuple[np.ndarray, Dict[str, float]]:
     features = np.stack([u, v, mask], axis=1)  # (T, 3, h, w)
 
     # Get wanted case params
-    param_keys = ['velocity', 'density', 'viscosity', 'height', 'width']
+    param_keys = ["velocity", "density", "viscosity", "height", "width"]
     case_params = {k: case_params[k] for k in param_keys}
     return features, case_params
 
@@ -105,7 +105,7 @@ class DamFlowDataset(CfdDataset):
     """
 
     data_delta_time = 0.1  # Time difference (s) between two frames in the data.
-    case_params_keys = ['velocity', 'density', 'viscosity', 'dx', 'dy']
+    case_params_keys = ["velocity", "density", "viscosity", "height", "width"]
 
     def __init__(
         self,
@@ -146,15 +146,18 @@ class DamFlowDataset(CfdDataset):
         self.num_frames: List[int] = []
         features: List[Tensor] = []
         case_ids: List[int] = []  # 每个样本对应的case的id
+        self.all_features = []  # (N, T, 3, h, w)
 
-        # 遍历每个case的每一帧，构造features和labels
+        # loop every case to create features and labels
         for case_id, case_dir in enumerate(tqdm(case_dirs)):
             # (T, c, h, w), dict
             this_case_features, this_case_params = load_case_data(case_dir)
+            print(this_case_params)
             if self.norm_props:
                 normalize_physics_props(this_case_params)
             if self.norm_bc:
-                normalize_bc(this_case_params, 'velocity')
+                normalize_bc(this_case_params, "velocity")
+            self.all_features.append(this_case_features)
 
             T, c, h, w = this_case_features.shape
             self.num_features += T * h * w
@@ -197,7 +200,6 @@ class DamFlowDataset(CfdDataset):
     def __getitem__(self, idx: int):
         # During evaluation, we need an entire frame
         # So each example returns (case_params, frame)
-        # The number of examples is
         case_id, frame_idx = self.idx_to_case_id_and_frame_idx(idx)
         t = torch.tensor([frame_idx]).float()
         frame = self.features[case_id][frame_idx]  # (T, c, h, w)
@@ -252,13 +254,11 @@ class DamFlowAutoDataset(CfdAutoDataset):
             self.labels: List[Tensor]  # (2, h, w)
             self.case_ids: List[int]  # Each sample's case ID
         """
-        # 根据 case ID 来排序 case 子目录
         self.case_params: List[dict] = []
         all_inputs: List[Tensor] = []
         all_labels: List[Tensor] = []
-        all_case_ids: List[int] = []  # 每个样本对应的case的id
+        all_case_ids: List[int] = []
 
-        # 遍历每个case的每一帧，构造features和labels
         for case_id, case_dir in enumerate(case_dirs):
             case_features, this_case_params = load_case_data(case_dir)  # (T, c, h, w)
             inputs = case_features[:-time_step_size, :]  # (T, 3, h, w)
@@ -276,22 +276,12 @@ class DamFlowAutoDataset(CfdAutoDataset):
             # Stop when converged
             for i in range(num_steps):
                 inp = torch.tensor(inputs[i], dtype=torch.float32)  # (2, h, w)
-                out = torch.tensor(
-                    outputs[i], dtype=torch.float32
-                )
+                out = torch.tensor(outputs[i], dtype=torch.float32)
 
-                # # Check for convergence
-                # inp_magn = torch.sqrt(inp[0] ** 2 + inp[1] ** 2)
-                # out_magn = torch.sqrt(out[0] ** 2 + out[1] ** 2)
-                # diff = torch.abs(inp_magn - out_magn).mean()
-                # # print(f"Mean difference: {diff}")
-                # if diff < self.stable_state_diff:
-                #     print(f"Converged at {i} out of {num_steps}, {this_case_params}")
-                #     break
                 assert not torch.isnan(inp).any()
                 assert not torch.isnan(out).any()
                 all_inputs.append(inp)
-                all_labels.append(out[:1])  # Only learn u
+                all_labels.append(out)
                 all_case_ids.append(case_id)
         self.inputs = torch.stack(all_inputs)  # (num_samples, 3, h, w)
         self.labels = torch.stack(all_labels)  # (num_samples, 1, h, w)

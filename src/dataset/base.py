@@ -67,14 +67,6 @@ class KarmanDataset(CfdDataset):
         self.labels = self.features[time_step_size:]  # (T - time_step_size, c, h, w)
         self.features = self.features[:-time_step_size]  # (T - time_step_size, c, h, w)
 
-        # # Make 200 duplicates
-        # self.features = self.features[100]
-        # self.labels = self.labels[100]
-        # self.features = self.features.unsqueeze(0)
-        # self.features = self.features.repeat(1000, 1, 1, 1)
-        # self.labels = self.labels.unsqueeze(0)
-        # self.labels = self.labels.repeat(1000, 1, 1, 1)
-
     def __getitem__(self, idx: int):
         feat = self.features[idx]
         label = self.labels[idx]

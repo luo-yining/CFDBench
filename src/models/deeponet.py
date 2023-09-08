@@ -178,12 +178,11 @@ class DeepONet(CfdModel):
         case_params = self.branch_net(case_params)  # (b, p)
         x_trunk = self.trunk_net(x_trunk)  # (b, k, p)
 
-        # x_trunk = x_trunk.unsqueeze(0)  # (1, k, p)
         case_params = case_params.unsqueeze(1)  # (b, 1, p)
         preds = torch.sum(case_params * x_trunk, dim=-1) + self.bias  # (b, k)
 
         if label is not None:
-            # Use only the u channel
+            # Only predict u
             label = label[:, 0]  # (B, w, h)
             # we have labels[i, j] = label[
             #     i, query_points[i, j, 0], query_points[i, j, 1]]

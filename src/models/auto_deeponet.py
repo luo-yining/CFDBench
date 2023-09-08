@@ -1,8 +1,8 @@
 # coding: utf8
 
-'''
+"""
 Contains the implementation of autoregressive DeepONet
-'''
+"""
 
 from itertools import product
 from typing import List, Optional
@@ -46,11 +46,11 @@ class AutoDeepONet(AutoCfdModel):
         act_norm: bool = False,
         act_on_output: bool = False,
     ):
-        '''
+        """
         Args:
         - branch_dim: int, the dimension of the branch net input.
         - trunk_dim: int, the dimension of the trunk net input.
-        '''
+        """
         super().__init__(loss_fn)
         self.branch_dim = branch_dim
         self.trunk_dim = trunk_dim
@@ -169,13 +169,11 @@ class AutoDeepONet(AutoCfdModel):
         )  # (h * w, 2)
         # query_points = query_points / 100
         # (b, 1, h * w)
-        preds = self.forward(x, query_idxs=query_idxs, case_params=case_params)['preds']
+        preds = self.forward(x, case_params=case_params, query_idxs=query_idxs)["preds"]
         preds = preds.view(-1, 1, height, width)  # (b, 1, h, w)
         return preds
 
-    def generate_many(
-        self, x: Tensor, case_params: Tensor, steps: int
-    ) -> List[Tensor]:
+    def generate_many(self, x: Tensor, case_params: Tensor, steps: int) -> List[Tensor]:
         """
         x: (c, h, w) or (B, c, h, w)
         mask: (h, w). 1 for interior, 0 for boundaries.
@@ -184,12 +182,15 @@ class AutoDeepONet(AutoCfdModel):
         Returns:
             list of tensors, each of shape (b, c, h, w)
         """
+        assert len(x.shape) == len(case_params.shape) + 2
         if x.dim() == 3:
             x = x.unsqueeze(0)  # (1, c, h, w)
+            case_params = case_params.unsqueeze(0)  # (1, p)
+        assert x.shape[0] == case_params.shape[0]
         cur_frame = x
-        frames = [cur_frame]
+        preds = []
         for _ in range(steps):
             # (b, c, h, w)
             cur_frame = self.generate(cur_frame, case_params=case_params)
-            frames.append(cur_frame)
-        return frames
+            preds.append(cur_frame)
+        return preds

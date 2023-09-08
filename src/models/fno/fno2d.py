@@ -134,7 +134,6 @@ class Fno2d(AutoCfdModel):
         self.modes2 = modes2
         self.hidden_dim = hidden_dim
         self.padding = padding  # pad the domain if input is non-periodic
-        # self.fc0 = nn.Linear(12, self.width)
 
         self.act_fn = nn.GELU()
         # Channel projection into `hidden_dim` channels
@@ -157,8 +156,6 @@ class Fno2d(AutoCfdModel):
             )
         self.blocks = nn.Sequential(*blocks)
 
-        # self.fc1 = nn.Linear(self.width, 128)
-        # self.fc2 = nn.Linear(128, 1)
         self.fc1 = nn.Conv2d(self.hidden_dim, 128, 1, 1, 0)
         self.fc2 = nn.Conv2d(128, self.out_chan, 1, 1, 0)
 
@@ -180,12 +177,9 @@ class Fno2d(AutoCfdModel):
         batch_size, _, height, width = inputs.shape
 
         # 物性
-        # density = case_params["density"]  # (B, )
-        # viscosity = case_params["viscosity"]  # (B, )
-        # props = torch.stack([density, viscosity], dim=1)  # (B, 2)
-        props = case_params  # (B, 5)
-        props = props.unsqueeze(-1).unsqueeze(-1)  # (B, 5, 1, 1)
-        props = props.repeat(1, 1, height, width)  # (B, 5, H, W)
+        props = case_params  # (B, p)
+        props = props.unsqueeze(-1).unsqueeze(-1)  # (B, p, 1, 1)
+        props = props.repeat(1, 1, height, width)  # (B, p, H, W)
 
         # Append (x, y) coordinates to every location
         grid = self.get_coords(inputs.shape, inputs.device)  # (b, 2, h, w)
@@ -203,7 +197,6 @@ class Fno2d(AutoCfdModel):
             # pad the domain if inputis non-periodic
             inputs = inputs[..., : -self.padding, : -self.padding]
 
-        # x = x.permute(0, 2, 3, 1)
         inputs = self.fc1(inputs)  # (b, 128, h, w)
         inputs = self.act_fn(inputs)
         preds = self.fc2(inputs)  # (b, c_out, h, w)

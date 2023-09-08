@@ -253,7 +253,7 @@ class TubeFlowAutoDataset(CfdAutoDataset):
                 assert not torch.isnan(inp).any()
                 assert not torch.isnan(out).any()
                 all_inputs.append(inp)
-                all_labels.append(out[:1])  # Only learn u
+                all_labels.append(out)
                 all_case_ids.append(case_id)
         self.inputs = torch.stack(all_inputs)  # (num_samples, 3, h, w)
         self.labels = torch.stack(all_labels)  # (num_samples, 1, h, w)

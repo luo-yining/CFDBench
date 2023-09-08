@@ -34,9 +34,12 @@ def collate_fn(batch: list):
     inputs, labels, case_params = zip(*batch)
     inputs = torch.stack(inputs)  # (b, 3, h, w)
     labels = torch.stack(labels)  # (b, 3, h, w)
-    labels = labels[:, :1]  # (b, 1, h, w), only predict u
+
+    # The last channel from features is the binary mask.
+    labels = labels[:, :-1]  # (b, 2, h, w)
     mask = inputs[:, -1:]  # (b, 1, h, w)
-    inputs = inputs[:, :2]  # (b, 2, h, w)
+    inputs = inputs[:, :-1]  # (b, 2, h, w)
+
     # Case params is a dict, turn it into a tensor
     keys = [x for x in case_params[0].keys() if x not in ["rotated", "dx", "dy"]]
     case_params_vec = []

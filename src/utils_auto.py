@@ -38,7 +38,51 @@ def init_model(args: Args) -> AutoCfdModel:
     loss_fn = loss_name_to_fn(args.loss_name)
     n_rows, n_cols, n_case_params = get_input_shapes(args)
 
-    if args.model == "resnet":
+    if args.model == "auto_ffn":
+        model = AutoFfn(
+            input_field_dim=n_rows * n_cols,
+            num_case_params=n_case_params,
+            query_dim=2,
+            loss_fn=loss_fn,
+            width=args.autoffn_width,
+            depth=args.autoffn_depth,
+        ).cuda()
+        return model
+    elif args.model == "auto_deeponet":
+        branch_dim = n_cols * n_rows + n_case_params
+        model = AutoDeepONet(
+            branch_dim=branch_dim,  # +2 因为物性
+            trunk_dim=2,  # (x, y)
+            loss_fn=loss_fn,
+            width=args.deeponet_width,
+            trunk_depth=args.trunk_depth,
+            branch_depth=args.branch_depth,
+            act_name=args.act_fn,
+        ).cuda()
+        return model
+    elif args.model == "auto_edeeponet":
+        model = AutoEDeepONet(
+            dim_branch1=n_rows * n_cols,
+            dim_branch2=n_case_params,
+            trunk_dim=2,  # (x, y)
+            loss_fn=loss_fn,
+            width=args.autoedeeponet_width,
+            trunk_depth=args.autoedeeponet_depth,
+            branch_depth=args.autoedeeponet_depth,
+            act_name=args.autoedeeponet_act_fn,
+        ).cuda()
+        return model
+    elif args.model == "auto_deeponet_cnn":
+        model = AutoDeepONetCnn(
+            in_chan=3,  # (u, v, p)
+            height=n_rows,
+            width=n_cols,
+            num_case_params=n_case_params,
+            query_dim=2,
+            loss_fn=loss_fn,
+        ).cuda()
+        return model
+    elif args.model == "resnet":
         model = ResNet(
             in_chan=args.in_chan,  # mask is not included
             out_chan=args.out_chan,
@@ -54,20 +98,9 @@ def init_model(args: Args) -> AutoCfdModel:
             in_chan=args.in_chan,  # Mask is not included
             out_chan=args.out_chan,
             loss_fn=loss_fn,
+            n_case_params=n_case_params,
             insert_case_params_at=args.unet_insert_case_params_at,
             dim=args.unet_dim,
-        ).cuda()
-        return model
-    elif args.model == "auto_deeponet":
-        branch_dim = n_cols * n_rows + n_case_params
-        model = AutoDeepONet(
-            branch_dim=branch_dim,  # +2 因为物性
-            trunk_dim=2,  # (x, y)
-            loss_fn=loss_fn,
-            width=args.deeponet_width,
-            trunk_depth=args.trunk_depth,
-            branch_depth=args.branch_depth,
-            act_name=args.act_fn,
         ).cuda()
         return model
     elif args.model == "fno":
@@ -79,38 +112,6 @@ def init_model(args: Args) -> AutoCfdModel:
             hidden_dim=args.fno_hidden_dim,  # Hidden dim. in the temporal domain
             modes1=args.fno_modes_x,
             modes2=args.fno_modes_y,
-        ).cuda()
-        return model
-    elif args.model == "auto_edeeponet":
-        model = AutoEDeepONet(
-            dim_branch1=n_rows * n_cols,
-            dim_branch2=n_case_params,
-            trunk_dim=2,  # (x, y)
-            loss_fn=loss_fn,
-            width=args.autoedeeponet_width,
-            trunk_depth=args.autoedeeponet_depth,
-            branch_depth=args.autoedeeponet_depth,
-            act_name=args.autoedeeponet_act_fn,
-        ).cuda()
-        return model
-    elif args.model == "auto_ffn":
-        model = AutoFfn(
-            input_field_dim=n_rows * n_cols,
-            num_case_params=n_case_params,
-            query_dim=2,
-            loss_fn=loss_fn,
-            width=args.autoffn_width,
-            depth=args.autoffn_depth,
-        ).cuda()
-        return model
-    elif args.model == "auto_deeponet_cnn":
-        model = AutoDeepONetCnn(
-            in_chan=3,  # (u, v, p)
-            height=n_rows,
-            width=n_cols,
-            num_case_params=n_case_params,
-            query_dim=2,
-            loss_fn=loss_fn,
         ).cuda()
         return model
     else:

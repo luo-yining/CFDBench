@@ -25,7 +25,7 @@ from args import Args
 
 def collate_fn(batch: list):
     case_params, t, label = zip(*batch)
-    case_params = torch.stack(case_params)  # (b, 5)
+    case_params = torch.stack(case_params)  # (b, p)
     label = torch.stack(label)  # (b, c, h, w), c=2
     t = torch.stack(t)  # (b, 1)
     return dict(

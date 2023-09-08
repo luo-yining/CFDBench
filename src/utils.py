@@ -247,6 +247,7 @@ def get_output_dir(args: Args, is_auto: bool = False) -> Path:
 
 
 def load_best_ckpt(model, output_dir: Path):
+    print(f"Finding the best checkpoint from {output_dir}")
     best_ckpt_dir = get_best_ckpt(output_dir)
     assert best_ckpt_dir is not None
     print(f"Loading best checkpoint from {best_ckpt_dir}")

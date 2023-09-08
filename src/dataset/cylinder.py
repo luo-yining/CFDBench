@@ -208,6 +208,7 @@ class CylinderFlowAutoDataset(CfdAutoDataset):
         case_dirs: List[Path],
         norm_props: bool,
         norm_bc: bool,
+        split: str,
         delta_time: float = 0.1,
         stable_state_diff: float = 0.001,
     ):
@@ -233,11 +234,13 @@ class CylinderFlowAutoDataset(CfdAutoDataset):
         self.case_dirs = case_dirs
         self.norm_props = norm_props
         self.norm_bc = norm_bc
+        self.split = split
         self.delta_time = delta_time
         self.stable_state_diff = stable_state_diff
 
         # The difference between input and output in number of frames.
         self.time_step_size = int(self.delta_time / self.data_delta_time)
+        cache_dir = Path(".cache/cylinder_data")
         self.load_data(case_dirs, self.time_step_size)
 
     def load_data(self, case_dirs, time_step_size: int):
@@ -249,13 +252,24 @@ class CylinderFlowAutoDataset(CfdAutoDataset):
             self.labels: List[Tensor]  # (2, h, w)
             self.case_ids: List[int]  # Each sample's case ID
         """
-        # 根据 case ID 来排序 case 子目录
+        # Cache preprocessing for speedup
+        cache_dir = Path("./dataset/cache/cylinder/", self.split)
+        if cache_dir.exists():
+            print("Loading from cache")
+            self.inputs = torch.load(cache_dir / "inputs.pt")
+            self.labels = torch.load(cache_dir / "labels.pt")
+            self.case_ids = torch.load(cache_dir / "case_ids.pt")
+            self.case_params = torch.load(cache_dir / "case_params.pt")
+            self.all_features = torch.load(cache_dir / "all_features.pt")
+            return
+
         self.case_params: List[dict] = []
         all_inputs: List[Tensor] = []
         all_labels: List[Tensor] = []
-        all_case_ids: List[int] = []  # 每个样本对应的case的id
+        all_case_ids: List[int] = []  # The case ID of each example
+        self.all_features: List[Tensor] = []
 
-        # 遍历每个case的每一帧，构造features和labels
+        # Loop cases to create features and labels
         for case_id, case_dir in enumerate(case_dirs):
             case_features, this_case_params = load_case_data(case_dir)  # (T, c, h, w)
             inputs = case_features[:-time_step_size, :]  # (T, 3, h, w)
@@ -286,11 +300,19 @@ class CylinderFlowAutoDataset(CfdAutoDataset):
                 assert not torch.isnan(inp).any()
                 assert not torch.isnan(out).any()
                 all_inputs.append(inp)
-                all_labels.append(out[:1])  # Only learn u
+                all_labels.append(out)
                 all_case_ids.append(case_id)
         self.inputs = torch.stack(all_inputs)  # (num_samples, 3, h, w)
         self.labels = torch.stack(all_labels)  # (num_samples, 1, h, w)
         self.case_ids = all_case_ids
+
+        # Cache
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        torch.save(self.inputs, cache_dir / "inputs.pt")
+        torch.save(self.labels, cache_dir / "labels.pt")
+        torch.save(self.case_ids, cache_dir / "case_ids.pt")
+        torch.save(self.case_params, cache_dir / "case_params.pt")
+        torch.save(self.all_features, cache_dir / "all_features.pt")
 
     def __getitem__(self, idx: int):
         inputs = self.inputs[idx]  # (3, h, w)
@@ -396,9 +418,9 @@ def get_cylinder_auto_datasets(
         norm_props=norm_props,
         norm_bc=norm_bc,
     )
-    train_data = CylinderFlowAutoDataset(train_case_dirs, **kwargs)
-    dev_data = CylinderFlowAutoDataset(dev_case_dirs, **kwargs)
-    test_data = CylinderFlowAutoDataset(test_case_dirs, **kwargs)
+    train_data = CylinderFlowAutoDataset(train_case_dirs, split='train', **kwargs)
+    dev_data = CylinderFlowAutoDataset(dev_case_dirs, split='dev', **kwargs)
+    test_data = CylinderFlowAutoDataset(test_case_dirs, split='test', **kwargs)
     return train_data, dev_data, test_data
 
 

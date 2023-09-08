@@ -1,5 +1,5 @@
 """ Parts of the U-Net model """
-from typing import Optional
+from typing import Optional, List
 
 import torch
 from torch import nn, Tensor
@@ -106,6 +106,7 @@ class UNet(AutoCfdModel):
         in_chan: int,
         out_chan: int,
         loss_fn: nn.Module,
+        n_case_params: int,
         insert_case_params_at: str = "hidden",
         bilinear: bool = False,
         dim: int = 8,
@@ -115,15 +116,18 @@ class UNet(AutoCfdModel):
         super().__init__(loss_fn)
         self.in_chan = in_chan
         self.out_chan = out_chan
+        self.n_case_params = n_case_params
         self.insert_case_params_at = insert_case_params_at
         self.bilinear = bilinear
         self.dim = dim
 
         if insert_case_params_at == "hidden":
-            self.case_params_fc = nn.Linear(5, dim * 16)
+            self.case_params_fc = nn.Linear(n_case_params, dim * 16)
 
         if insert_case_params_at == "input":
-            self.in_conv = DoubleConv(in_chan + 1 + 5, dim)  # + 5 for case params
+            self.in_conv = DoubleConv(
+                in_chan + 1 + n_case_params, dim
+            )  # + 5 for case params
         else:
             self.in_conv = DoubleConv(in_chan + 1, dim)  # + 1 for mask
         self.down1 = Down(dim, dim * 2)
@@ -189,12 +193,12 @@ class UNet(AutoCfdModel):
         preds += residual
 
         # Only predict u
-        preds = preds[:, :1]
+        # preds = preds[:, :1]
         if mask is not None:
             preds = preds * mask
 
         if label is not None:
-            label = label[:, :1]
+            # label = label[:, :1]
 
             if mask is not None:
                 label = label * mask
@@ -206,19 +210,9 @@ class UNet(AutoCfdModel):
             )
         return dict(preds=preds)
 
-    # def use_checkpointing(self):
-    #     self.inc = torch.utils.checkpoint(self.inc)
-    #     self.down1 = torch.utils.checkpoint(self.down1)
-    #     self.down2 = torch.utils.checkpoint(self.down2)
-    #     self.down3 = torch.utils.checkpoint(self.down3)
-    #     self.down4 = torch.utils.checkpoint(self.down4)
-    #     self.up1 = torch.utils.checkpoint(self.up1)
-    #     self.up2 = torch.utils.checkpoint(self.up2)
-    #     self.up3 = torch.utils.checkpoint(self.up3)
-    #     self.up4 = torch.utils.checkpoint(self.up4)
-    #     self.outc = torch.utils.checkpoint(self.outc)
-
-    def generate_many(self, x: Tensor, case_params: Tensor, mask: Tensor, steps: int):
+    def generate_many(
+        self, inputs: Tensor, case_params: Tensor, mask: Tensor, steps: int
+    ) -> List[Tensor]:
         """
         x: (c, h, w) or (B, c, h, w)
         mask: (h, w). 1 for interior, 0 for boundaries.

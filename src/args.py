@@ -21,14 +21,14 @@ class Args(Tap):
     """One of: 'deeponet', 'unet', 'fno', 'resnet'"""
     in_chan: int = 2
     """Number of input channels, only applicable to autoregressive models"""
-    out_chan: int = 1
+    out_chan: int = 2
     """Number of output channels, only applicable to autoregressive models"""
 
     batch_size: int = 32
     eval_batch_size: int = 16
 
     # Dataset hyperparamters
-    data_name: str = 'cavity_prop_bc'
+    data_name: str = 'cavity_prop'
     """
     One of: 'laminar_*', 'cavity_*', 'karman_*', where * is used to indicate the
     subset to use. E.g., 'laminar_prop_geo' trains on the subset of laminar
