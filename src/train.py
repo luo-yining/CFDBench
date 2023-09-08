@@ -8,16 +8,13 @@ import numpy as np
 import torch
 from torch.optim import Adam, lr_scheduler
 
-# from dataset.cavity import CavityDataset
 from dataset import get_dataset, CfdDataset
-
 from models.base_model import CfdModel
 from models.deeponet import DeepONet
 from models.ffn import FfnModel
 from models.loss import loss_name_to_fn
 from utils import (
     dump_json,
-    plot,
     plot_loss,
     get_output_dir,
     load_best_ckpt,
@@ -189,7 +186,6 @@ def train(
     all_train_losses = []
 
     for ep in range(num_epochs):
-        # print(f"Epoch {ep}")
         ep_start_time = time.time()
         ep_train_losses = []
         for step, batch in enumerate(loader):

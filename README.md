@@ -54,7 +54,23 @@ The implementation of the models is located in `src/models`
 
 ### Prepare Data
 
-Move the data into a `data` directory next to `src` directory.
+Move the data into a `data` directory next to `src` directory, such that the directory
+looks like:
+
+```
+▼ data/
+    ▼ cavity/
+        ▼ bc/
+        ▼ geo/
+        ▼ prop/
+    ► tube/
+    ► dam/
+    ► cylinder/
+► generation-code/
+► src/
+.gitignore
+README.md
+```
 
 ### Training
 
@@ -77,3 +93,7 @@ For more options, such as model hyperparameters, run `python train.py -h` or `py
 ### Inference
 
 Set `--mode test` when executing `train.py` or `train_auto.py`.
+
+### Hardware Requirements
+
+See the Results section in the paper. Reduce the batch size if you run out of VRAM.

@@ -211,7 +211,6 @@ def train(
 
     for ep in range(num_epochs):
         ep_start_time = time.time()
-        print(f"==== Epoch {ep} ====")
         ep_train_losses = []
         for step, batch in enumerate(train_loader):
             # Forward

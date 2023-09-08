@@ -60,6 +60,11 @@ def plot_predictions(
     if inp is not None:
         u_min = min(inp_arr.min(), pred_arr.min(), label_arr.min())
         u_max = max(inp_arr.max(), pred_arr.max(), label_arr.max())
+    else:
+        u_min = min(pred_arr.min(), label_arr.min())
+        u_max = max(pred_arr.max(), label_arr.max())
+
+    if inp is not None:
         plt.axis('off')
         plt.imshow(inp_arr, vmin=u_min, vmax=u_max, cmap="coolwarm")
         plt.savefig(inp_dir / f"{step:04}.png", bbox_inches='tight', pad_inches=0)
