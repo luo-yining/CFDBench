@@ -234,33 +234,39 @@ class Fno2d(AutoCfdModel):
         Returns:
             output: (steps, c, h, w)
         """
-        # if x.dim() == 3:
-        #     x = x.unsqueeze(0)  # (1, c, h, w)
         outputs = self.forward(
-            inputs, case_params=case_params, mask=mask
+            inputs=inputs, case_params=case_params, mask=mask
         )  # (b, c, h, w)
         preds = outputs["preds"]
-        u = preds[:, 0]
-        return u
+        return preds
 
-    def generate_many(self, x: Tensor, case_params: dict, steps: int) -> List[Tensor]:
+    def generate_many(
+        self, inputs: Tensor, case_params: Tensor, mask: Tensor, steps: int
+    ) -> List[Tensor]:
         """
         Args:
             x (Tensor): (c, h, w)
-            case_params (dict):
+            case_params (Tensor): (p)
+            mask (Tensor): (h, w)
         Returns:
             output: (steps, c, h, w)
         """
-        if x.dim() == 3:
-            x = x.unsqueeze(0)
-        # steps = x.shape[0]
-        cur_frame = x  # (b, c, h, w)
-        frames = [cur_frame]
+        assert len(inputs.shape) == len(case_params.shape) + 2
+        if inputs.dim() == 3:
+            # Add a dimension for batch size of 1
+            inputs = inputs.unsqueeze(0)
+            case_params = case_params.unsqueeze(0)
+            mask = mask.unsqueeze(0)
+        assert inputs.shape[0] == case_params.shape[0] == mask.shape[0]
+
+        cur_frame = inputs  # (b, c, h, w)
+        preds = []
         for _ in range(steps):
-            print(cur_frame.shape)
-            cur_frame = self.generate_one(cur_frame, case_params=case_params)
-            frames.append(cur_frame)
-        return frames
+            cur_frame = self.generate(
+                inputs=cur_frame, case_params=case_params, mask=None
+            )
+            preds.append(cur_frame)
+        return preds
 
 
 if __name__ == "__main__":
