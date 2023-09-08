@@ -209,6 +209,7 @@ class CylinderFlowAutoDataset(CfdAutoDataset):
         norm_props: bool,
         norm_bc: bool,
         split: str,
+        cache_dir: Path,
         delta_time: float = 0.1,
         stable_state_diff: float = 0.001,
     ):
@@ -235,12 +236,12 @@ class CylinderFlowAutoDataset(CfdAutoDataset):
         self.norm_props = norm_props
         self.norm_bc = norm_bc
         self.split = split
+        self.cache_dir = cache_dir / split
         self.delta_time = delta_time
         self.stable_state_diff = stable_state_diff
 
         # The difference between input and output in number of frames.
         self.time_step_size = int(self.delta_time / self.data_delta_time)
-        cache_dir = Path(".cache/cylinder_data")
         self.load_data(case_dirs, self.time_step_size)
 
     def load_data(self, case_dirs, time_step_size: int):
@@ -253,14 +254,13 @@ class CylinderFlowAutoDataset(CfdAutoDataset):
             self.case_ids: List[int]  # Each sample's case ID
         """
         # Cache preprocessing for speedup
-        cache_dir = Path("./dataset/cache/cylinder/", self.split)
-        if cache_dir.exists():
-            print("Loading from cache")
-            self.inputs = torch.load(cache_dir / "inputs.pt")
-            self.labels = torch.load(cache_dir / "labels.pt")
-            self.case_ids = torch.load(cache_dir / "case_ids.pt")
-            self.case_params = torch.load(cache_dir / "case_params.pt")
-            self.all_features = torch.load(cache_dir / "all_features.pt")
+        if self.cache_dir.exists():
+            print(f"Loading from cache: {self.cache_dir}")
+            self.inputs = torch.load(self.cache_dir / "inputs.pt")
+            self.labels = torch.load(self.cache_dir / "labels.pt")
+            self.case_ids = torch.load(self.cache_dir / "case_ids.pt")
+            self.case_params = torch.load(self.cache_dir / "case_params.pt")
+            self.all_features = torch.load(self.cache_dir / "all_features.pt")
             return
 
         self.case_params: List[dict] = []
@@ -307,12 +307,12 @@ class CylinderFlowAutoDataset(CfdAutoDataset):
         self.case_ids = all_case_ids
 
         # Cache
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        torch.save(self.inputs, cache_dir / "inputs.pt")
-        torch.save(self.labels, cache_dir / "labels.pt")
-        torch.save(self.case_ids, cache_dir / "case_ids.pt")
-        torch.save(self.case_params, cache_dir / "case_params.pt")
-        torch.save(self.all_features, cache_dir / "all_features.pt")
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        torch.save(self.inputs, self.cache_dir / "inputs.pt")
+        torch.save(self.labels, self.cache_dir / "labels.pt")
+        torch.save(self.case_ids, self.cache_dir / "case_ids.pt")
+        torch.save(self.case_params, self.cache_dir / "case_params.pt")
+        torch.save(self.all_features, self.cache_dir / "all_features.pt")
 
     def __getitem__(self, idx: int):
         inputs = self.inputs[idx]  # (3, h, w)
@@ -376,17 +376,17 @@ def get_cylinder_datasets(
 
 def get_cylinder_auto_datasets(
     data_dir: Path,
-    case_name: str,
+    subset_name: str,
     norm_props: bool,
     norm_bc: bool,
     delta_time: float = 0.01,
     stable_state_diff: float = 0.001,
     seed: int = 0,
 ) -> Tuple[CylinderFlowAutoDataset, CylinderFlowAutoDataset, CylinderFlowAutoDataset]:
-    print(data_dir, case_name)
+    print(data_dir, subset_name)
     case_dirs = []
     for name in ["prop", "bc", "geo"]:
-        if name in case_name:
+        if name in subset_name:
             case_dir = data_dir / name
             this_case_dirs = sorted(
                 case_dir.glob("case*"), key=lambda x: int(x.name[4:])
@@ -417,6 +417,7 @@ def get_cylinder_auto_datasets(
         stable_state_diff=stable_state_diff,
         norm_props=norm_props,
         norm_bc=norm_bc,
+        cache_dir=Path('./dataset/cache/cylinder', subset_name)
     )
     train_data = CylinderFlowAutoDataset(train_case_dirs, split='train', **kwargs)
     dev_data = CylinderFlowAutoDataset(dev_case_dirs, split='dev', **kwargs)
