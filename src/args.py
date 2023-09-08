@@ -3,7 +3,6 @@ from tap import Tap
 
 class Args(Tap):
     seed: int = 0
-    # output_dir: str = "result/cavity_diff_prop"
     output_dir: str = "result"
     """The directory to save the results to"""
     lr: float = 1e-3  # Initial learning rate

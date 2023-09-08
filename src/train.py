@@ -21,6 +21,7 @@ from utils import (
     plot_loss,
     get_output_dir,
     load_best_ckpt,
+    plot_predictions,
 )
 from args import Args
 
@@ -30,10 +31,6 @@ def collate_fn(batch: list):
     case_params = torch.stack(case_params)  # (b, 5)
     label = torch.stack(label)  # (b, c, h, w), c=2
     t = torch.stack(t)  # (b, 1)
-
-    # print(case_params.shape, case_params.dtype)
-    # print(labels.shape, labels.dtype)
-    # print(t.shape, t.dtype)
     return dict(
         case_params=case_params.cuda(),
         t=t.cuda(),
@@ -46,7 +43,7 @@ def evaluate(
     data: CfdDataset,
     output_dir: Path,
     batch_size: int = 64,
-    measure_time: bool = True,
+    measure_time: bool = False,
 ) -> Dict[str, Any]:
     if measure_time:
         batch_size = 1
@@ -95,11 +92,18 @@ def evaluate(
             all_preds.append(preds.cpu().detach())
             if step % plot_interval == 0 and not measure_time:
                 image_dir.mkdir(exist_ok=True, parents=True)
-                plot(
-                    inp=label[0][0],
+                # plot(
+                #     inp=label[0][0],
+                #     label=label[0][0],
+                #     pred=preds[0][0],
+                #     out_path=image_dir / f"step_{step}.png",
+                # )
+                plot_predictions(
+                    inp=None,
                     label=label[0][0],
                     pred=preds[0][0],
-                    out_path=image_dir / f"step_{step}.png",
+                    out_dir=image_dir,
+                    step=step,
                 )
 
     if measure_time:
@@ -130,6 +134,7 @@ def test(
     output_dir: Path,
     plot_interval: int = 5,
     batch_size: int = 1,
+    measure_time: bool = False,
 ):
     print("==== Testing ====")
     output_dir.mkdir(exist_ok=True, parents=True)
@@ -138,8 +143,8 @@ def test(
         data,
         output_dir,
         batch_size=batch_size,
+        measure_time=measure_time,
     )
-    # scores = result["scores"]
     preds = result["preds"]
     preds = torch.cat(preds, dim=0)
     torch.save(preds, output_dir / "preds.pt")
@@ -161,6 +166,7 @@ def train(
     batch_size: int = 64,
     log_interval: int = 50,
     eval_interval: int = 2,
+    measure_time: bool = False,
 ):
     loader = DataLoader(
         train_data, batch_size=batch_size, collate_fn=collate_fn, shuffle=True
@@ -200,7 +206,7 @@ def train(
             # Log
             ep_train_losses.append(loss.item())
             global_step += 1
-            if global_step % log_interval == 0:
+            if global_step % log_interval == 0 and not measure_time:
                 avg_loss = sum(ep_train_losses) / (len(ep_train_losses) + 1e-5)
                 log_info = {
                     "ep": ep,
@@ -212,7 +218,6 @@ def train(
                 }
                 print(log_info)
 
-        measure_time = True
         if measure_time:
             print("Memory usage:")
             print(torch.cuda.memory_summary('cuda'))

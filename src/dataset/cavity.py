@@ -336,7 +336,7 @@ class CavityAutoDataset(CfdAutoDataset):
 
 def get_cavity_datasets(
     data_dir: Path,
-    case_name,
+    case_name: str,
     norm_props: bool,
     norm_bc: bool,
     seed: int = 0,

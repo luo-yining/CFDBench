@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Union
+from typing import Union, Optional
 
 import torch
 from torch import Tensor
@@ -31,34 +31,39 @@ def load_json(path):
 
 
 def plot_predictions(
-    inp: Tensor,
     label: Tensor,
     pred: Tensor,
     out_dir: Path,
     step: int,
+    inp: Optional[Tensor] = None,  # non-autoregressive input func. is not plottable.
 ):
-    assert all([isinstance(x, Tensor) for x in [inp, label, pred]])
+    assert all([isinstance(x, Tensor) for x in [label, pred]])
     assert (
-        inp.shape == label.shape == pred.shape
-    ), f"{inp.shape}, {label.shape}, {pred.shape}"
+        label.shape == pred.shape
+    ), f"{label.shape}, {pred.shape}"
 
-    inp_dir = out_dir / "input"
-    inp_dir.mkdir(exist_ok=True, parents=True)
+    if inp is not None:
+        assert inp.shape == label.shape
+        assert isinstance(inp, Tensor)
+        inp_dir = out_dir / "input"
+        inp_dir.mkdir(exist_ok=True, parents=True)
+        inp_arr = inp.cpu().detach().numpy()
     label_dir = out_dir / "label"
     label_dir.mkdir(exist_ok=True, parents=True)
     pred_dir = out_dir / "pred"
     pred_dir.mkdir(exist_ok=True, parents=True)
 
-    inp_arr = inp.cpu().detach().numpy()
     pred_arr = pred.cpu().detach().numpy()
     label_arr = label.cpu().detach().numpy()
-    u_min = min(inp_arr.min(), pred_arr.min(), label_arr.min())
-    u_max = max(inp_arr.max(), pred_arr.max(), label_arr.max())
 
-    plt.axis('off')
-    plt.imshow(inp_arr, vmin=u_min, vmax=u_max, cmap="coolwarm")
-    plt.savefig(inp_dir / f"{step:04}.png", bbox_inches='tight', pad_inches=0)
-    plt.clf()
+    # Plot and save images
+    if inp is not None:
+        u_min = min(inp_arr.min(), pred_arr.min(), label_arr.min())
+        u_max = max(inp_arr.max(), pred_arr.max(), label_arr.max())
+        plt.axis('off')
+        plt.imshow(inp_arr, vmin=u_min, vmax=u_max, cmap="coolwarm")
+        plt.savefig(inp_dir / f"{step:04}.png", bbox_inches='tight', pad_inches=0)
+        plt.clf()
 
     plt.axis('off')
     plt.imshow(label_arr, vmin=u_min, vmax=u_max, cmap="coolwarm")

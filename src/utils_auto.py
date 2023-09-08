@@ -10,8 +10,28 @@ from models.loss import loss_name_to_fn
 from args import Args
 
 
+def get_input_shapes(args: Args):
+    if any(x in args.data_name for x in ["tube", "dam", "dam"]):
+        n_rows = args.num_rows + 2  # Top and bottom boundaries
+        n_cols = args.num_cols + 1  # Left boundary
+    else:
+        assert "cavity" in args.data_name
+        n_rows = args.num_rows
+        n_cols = args.num_cols
+    if "cylinder" in args.data_name:
+        # vel_in, density, viscosity, height, width, radius, center_x, center_y
+        n_case_params = 8
+    else:
+        assert any(x in args.data_name for x in ["cavity", "tube", "dam"])
+        # vel_in, density, viscosity, height, width
+        n_case_params = 5  # physical properties
+    return n_rows, n_cols, n_case_params
+
+
 def init_model(args: Args) -> AutoCfdModel:
     loss_fn = loss_name_to_fn(args.loss_name)
+    n_rows, n_cols, n_case_params = get_input_shapes(args)
+
     if args.model == "resnet":
         model = ResNet(
             in_chan=args.in_chan,  # mask is not included
@@ -33,20 +53,7 @@ def init_model(args: Args) -> AutoCfdModel:
         ).cuda()
         return model
     elif args.model == "auto_deeponet":
-        if any(x in args.data_name for x in ['laminar', 'karman', "dam"]):
-            num_rows = args.num_rows + 2  # Top and bottom boundaries
-            num_cols = args.num_cols + 1  # Left boundary
-        else:
-            num_rows = args.num_rows
-            num_cols = args.num_cols
-        if 'karman' in args.data_name:
-            # +8 for the case condition parameters
-            # vel_in, density, viscosity, height, width, radius, center_x, center_y
-            branch_dim = num_rows * num_cols + 8
-        else:
-            # +5 for the case condition parameters
-            # vel_in, density, viscosity, height, width
-            branch_dim = num_rows * num_cols + 5
+        branch_dim = n_cols * n_rows + n_case_params
         model = AutoDeepONet(
             branch_dim=branch_dim,  # +2 因为物性
             trunk_dim=2,  # (x, y)
@@ -69,22 +76,9 @@ def init_model(args: Args) -> AutoCfdModel:
         ).cuda()
         return model
     elif args.model == "auto_edeeponet":
-        if any(x in args.data_name for x in ['laminar', 'karman', "dam"]):
-            num_rows = args.num_rows + 2  # Top and bottom boundaries
-            num_cols = args.num_cols + 1  # Left boundary
-        else:
-            num_rows = args.num_rows
-            num_cols = args.num_cols
-        if 'karman' in args.data_name:
-            # vel_in, density, viscosity, height, width, radius, center_x, center_y
-            dim_branch2 = 8
-        else:
-            # vel_in, density, viscosity, height, width
-            dim_branch2 = 5  # physical properties
-        dim_branch1 = num_rows * num_cols  # u(t-1)
         model = AutoEDeepONet(
-            dim_branch1=dim_branch1,
-            dim_branch2=dim_branch2,
+            dim_branch1=n_rows * n_cols,
+            dim_branch2=n_case_params,
             trunk_dim=2,  # (x, y)
             loss_fn=loss_fn,
             width=args.autoedeeponet_width,
@@ -94,20 +88,8 @@ def init_model(args: Args) -> AutoCfdModel:
         ).cuda()
         return model
     elif args.model == "auto_ffn":
-        if any(x in args.data_name for x in ['laminar', 'karman', "dam"]):
-            num_rows = args.num_rows + 2  # Top and bottom boundaries
-            num_cols = args.num_cols + 1  # Left boundary
-        else:
-            num_rows = args.num_rows
-            num_cols = args.num_cols
-        if 'karman' in args.data_name:
-            # vel_in, density, viscosity, height, width, radius, center_x, center_y
-            n_case_params = 8
-        else:
-            # vel_in, density, viscosity, height, width
-            n_case_params = 5  # physical properties
         model = AutoFfn(
-            input_field_dim=num_rows * num_cols,
+            input_field_dim=n_rows * n_cols,
             num_case_params=n_case_params,
             query_dim=2,
             loss_fn=loss_fn,
@@ -116,22 +98,10 @@ def init_model(args: Args) -> AutoCfdModel:
         ).cuda()
         return model
     elif args.model == "auto_deeponet_cnn":
-        if any(x in args.data_name for x in ['laminar', 'karman', "dam"]):
-            num_rows = args.num_rows + 2  # Top and bottom boundaries
-            num_cols = args.num_cols + 1  # Left boundary
-        else:
-            num_rows = args.num_rows
-            num_cols = args.num_cols
-        if 'karman' in args.data_name:
-            # vel_in, density, viscosity, height, width, radius, center_x, center_y
-            n_case_params = 8
-        else:
-            # vel_in, density, viscosity, height, width
-            n_case_params = 5  # physical properties
         model = AutoDeepONetCnn(
             in_chan=3,  # (u, v, p)
-            height=num_rows,
-            width=num_cols,
+            height=n_rows,
+            width=n_cols,
             num_case_params=n_case_params,
             query_dim=2,
             loss_fn=loss_fn,
