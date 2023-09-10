@@ -63,21 +63,23 @@ def evaluate(
     plot_interval: int = 1,
     measure_time: bool = False,
 ):
+    if measure_time:
+        assert batch_size == 1
+
     loader = DataLoader(
         data, batch_size=batch_size, shuffle=False, collate_fn=collate_fn
     )
     scores = {name: [] for name in model.loss_fn.get_score_names()}
     input_scores = deepcopy(scores)
     all_preds: List[Tensor] = []
-    start_time = time.time()
-    model.eval()
     print("=== Evaluating ===")
     print(f"# examples: {len(data)}")
     print(f"Batch size: {batch_size}")
     print(f"# batches: {len(loader)}")
     print(f"Plot interval: {plot_interval}")
     print(f"Output dir: {output_dir}")
-
+    start_time = time.time()
+    model.eval()
     with torch.inference_mode():
         for step, batch in enumerate(loader):
             # inputs, labels, case_params = batch
@@ -103,14 +105,9 @@ def evaluate(
             # preds = preds.repeat(1, 3, 1, 1)
             all_preds.append(preds.cpu().detach())
             if step % plot_interval == 0 and not measure_time:
+                # Dump input, label and prediction flow images.
                 image_dir = output_dir / "images"
                 image_dir.mkdir(exist_ok=True, parents=True)
-                # plot(
-                #     inputs[0][0],
-                #     labels[0][0],
-                #     preds[0][0],
-                #     image_dir / f"step_{step}.png",
-                # )
                 plot_predictions(
                     inp=inputs[0][0],
                     label=labels[0][0],
@@ -156,14 +153,11 @@ def test(
     measure_time: bool = False,
 ):
     assert infer_steps > 0
-    image_dir = output_dir / "images"
-    image_dir.mkdir(exist_ok=True, parents=True)
-
+    assert plot_interval > 0
+    output_dir.mkdir(exist_ok=True, parents=True)
     print("=== Testing ===")
     print(f"batch_size: {batch_size}")
     print(f"Plot interval: {plot_interval}")
-    output_dir.mkdir(exist_ok=True, parents=True)
-
     result = evaluate(
         model,
         data,
@@ -172,10 +166,10 @@ def test(
         plot_interval=plot_interval,
         measure_time=measure_time,
     )
-    scores = result["scores"]
     preds = result["preds"]
-    dump_json(scores, output_dir / "scores.json")
+    scores = result["scores"]
     torch.save(preds, output_dir / "preds.pt")
+    dump_json(scores, output_dir / "scores.json")
     print("=== Testing done ===")
 
 
@@ -305,7 +299,6 @@ def main():
     print("Loading data...")
     data_dir = Path(args.data_dir)
     train_data, dev_data, test_data = get_auto_dataset(
-        # args.data_name,
         data_dir=data_dir,
         data_name=args.data_name,
         delta_time=args.delta_time,

@@ -40,31 +40,26 @@ def evaluate(
     data: CfdDataset,
     output_dir: Path,
     batch_size: int = 64,
+    plot_interval: int = 1,
     measure_time: bool = False,
 ) -> Dict[str, Any]:
     if measure_time:
-        batch_size = 1
+        assert batch_size == 1
 
     loader = DataLoader(
         data, batch_size=batch_size, shuffle=False, collate_fn=collate_fn
     )
-    num_batches = len(loader)
-    plot_interval = max(num_batches // 20, 1)
-    scores = {name: [] for name in model.loss_fn.get_score_names()}  # type: ignore
+    scores = {name: [] for name in model.loss_fn.get_score_names()}
     all_preds = []
-    # frame_diffs = []
     model.eval()
-    image_dir = output_dir / "images"
-    image_dir.mkdir(exist_ok=True, parents=True)
 
     print("=== Evaluating ===")
     print(f"# examples: {len(data)}")
     print(f"batch size: {batch_size}")
     print(f"# batches: {len(loader)}")
     print(f"Plot interval: {plot_interval}")
-
     start_time = time.time()
-
+    model.eval()
     with torch.no_grad():
         for step, batch in enumerate(loader):
             case_params = batch["case_params"]  # (b, 5)
@@ -72,10 +67,6 @@ def evaluate(
             t = batch["t"]  # (b, 1)
 
             height, width = label.shape[-2:]
-
-            # Compute difference between the input and label
-            # frame_diff = model.loss_fn(labels=labels[:, :1], preds=inputs[:, :1])
-            # frame_diffs.append(frame_diff.cpu().numpy())
 
             # Compute the prediction and its loss
             preds = model.generate_one(
@@ -88,13 +79,9 @@ def evaluate(
             preds = preds.repeat(1, 3, 1, 1)
             all_preds.append(preds.cpu().detach())
             if step % plot_interval == 0 and not measure_time:
+                # Dump input, label and prediction flow images.
+                image_dir = output_dir / "images"
                 image_dir.mkdir(exist_ok=True, parents=True)
-                # plot(
-                #     inp=label[0][0],
-                #     label=label[0][0],
-                #     pred=preds[0][0],
-                #     out_path=image_dir / f"step_{step}.png",
-                # )
                 plot_predictions(
                     inp=None,
                     label=label[0][0],
@@ -129,25 +116,30 @@ def test(
     model: CfdModel,
     data: CfdDataset,
     output_dir: Path,
-    plot_interval: int = 5,
+    plot_interval: int = 10,
     batch_size: int = 1,
     measure_time: bool = False,
 ):
-    print("==== Testing ====")
+    '''
+    Perform inference on the test set.
+    '''
+    assert plot_interval > 0
     output_dir.mkdir(exist_ok=True, parents=True)
+    print("==== Testing ====")
+    print(f"Batch size: {batch_size}")
+    print(f"Plot interval: {plot_interval}")
     result = evaluate(
         model,
         data,
         output_dir,
         batch_size=batch_size,
+        plot_interval=plot_interval,
         measure_time=measure_time,
     )
     preds = result["preds"]
-    preds = torch.cat(preds, dim=0)
+    scores = result["scores"]
     torch.save(preds, output_dir / "preds.pt")
-
-    del result["preds"]
-    dump_json(result, output_dir / "scores.json")
+    dump_json(scores, output_dir / "scores.json")
     print("==== Testing done ====")
 
 
@@ -341,7 +333,7 @@ def main():
             model,
             data=test_data,
             output_dir=output_dir / "test",
-            batch_size=8,
+            batch_size=1,
             plot_interval=1,
         )
 

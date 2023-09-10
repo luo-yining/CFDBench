@@ -73,7 +73,7 @@ def get_auto_dataset(
         delta_time: The time difference between input and output.
     """
     problem_name = data_name.split("_")[0]
-    assert problem_name in ["cavity", "tube", "cylinder", "dam"]
+    assert problem_name in ["cavity", "tube", "dam", "cylinder"]
     subset_name = data_name[len(problem_name) + 1 :]
     assert delta_time > 0
     print("Loading data...")
@@ -98,7 +98,7 @@ def get_auto_dataset(
     elif problem_name == "dam":
         train_data, dev_data, test_data = get_dam_auto_datasets(
             data_dir / problem_name,
-            case_name=subset_name,
+            subset_name=subset_name,
             norm_props=norm_props,
             norm_bc=norm_bc,
             delta_time=delta_time,

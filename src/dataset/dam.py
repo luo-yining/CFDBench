@@ -337,17 +337,17 @@ def get_dam_datasets(
 
 def get_dam_auto_datasets(
     data_dir: Path,
-    case_name: str,
+    subset_name: str,
     norm_props: bool,
     norm_bc: bool,
     delta_time: float = 0.1,
     stable_state_diff: float = 0.001,
     seed: int = 0,
 ) -> Tuple[DamFlowAutoDataset, DamFlowAutoDataset, DamFlowAutoDataset]:
-    print(data_dir, case_name)
+    print(data_dir, subset_name)
     case_dirs = []
     for name in ["prop", "bc", "geo"]:
-        if name in case_name:
+        if name in subset_name:
             case_dir = data_dir / name
             this_case_dirs = sorted(
                 case_dir.glob("case*"), key=lambda x: int(x.name[4:])
