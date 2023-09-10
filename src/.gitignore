@@ -8,3 +8,5 @@ poiseuille_geometries.json
 tensors/
 result/
 dataset/cache
+*.pdf
+*.png

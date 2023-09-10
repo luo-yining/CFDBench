@@ -220,13 +220,15 @@ class TubeFlowAutoDataset(CfdAutoDataset):
         self.case_params: List[dict] = []
         all_inputs: List[Tensor] = []
         all_labels: List[Tensor] = []
-        all_case_ids: List[int] = []  # 每个样本对应的case的id
+        all_case_ids: List[int] = []
+        self.all_features: List[np.ndarray] = []
 
-        # 遍历每个case的每一帧，构造features和labels
+        # loop all cases
         for case_id, case_dir in enumerate(case_dirs):
             case_features, this_case_params = load_case_data(case_dir)  # (T, c, h, w)
             inputs = case_features[:-time_step_size, :]  # (T, 3, h, w)
             outputs = case_features[time_step_size:, :]  # (T, 3, h, w)
+            self.all_features.append(case_features)
             assert len(inputs) == len(outputs)
 
             if self.norm_props:

@@ -88,7 +88,7 @@ class ResNet(AutoCfdModel):
         stride: int = 1,
     ):
         super().__init__(loss_fn)
-        # assert in_chan == out_chan
+        assert in_chan == out_chan
         self.in_chan = in_chan
         self.out_chan = out_chan
         self.hidden_chan = hidden_chan
@@ -188,11 +188,9 @@ class ResNet(AutoCfdModel):
         """
         outputs = self.forward(inputs, case_params=case_params, mask=mask)
         preds = outputs["preds"]
-        u_out = preds[:, 0]
         if mask is not None:
-            u_in = inputs[:, 0]
-            return u_out * mask + (1 - mask) * u_in
-        return u_out
+            return preds * mask + (1 - mask) * inputs[:, 0]
+        return preds
 
     def generate_many(
         self, x: Tensor, case_params: Tensor, steps: int, mask: Optional[Tensor] = None
