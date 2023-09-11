@@ -87,6 +87,7 @@ def init_model(args: Args) -> AutoCfdModel:
             in_chan=args.in_chan,  # mask is not included
             out_chan=args.out_chan,
             loss_fn=loss_fn,
+            n_case_params=n_case_params,
             hidden_chan=args.resnet_hidden_chan,
             num_blocks=args.resnet_depth,
             kernel_size=args.resnet_kernel_size,
@@ -107,6 +108,7 @@ def init_model(args: Args) -> AutoCfdModel:
         model = Fno2d(
             in_chan=args.in_chan,  # 2 for u and v
             out_chan=args.out_chan,
+            n_case_params=n_case_params,
             loss_fn=loss_fn,
             num_layers=args.fno_depth,
             hidden_dim=args.fno_hidden_dim,  # Hidden dim. in the temporal domain

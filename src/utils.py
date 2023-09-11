@@ -66,17 +66,17 @@ def plot_predictions(
 
     if inp is not None:
         plt.axis('off')
-        plt.imshow(inp_arr, vmin=u_min, vmax=u_max, cmap="coolwarm")
+        plt.imshow(inp_arr, vmin=inp_arr.min(), vmax=inp_arr.max(), cmap="coolwarm")
         plt.savefig(inp_dir / f"{step:04}.png", bbox_inches='tight', pad_inches=0)
         plt.clf()
 
     plt.axis('off')
-    plt.imshow(label_arr, vmin=u_min, vmax=u_max, cmap="coolwarm")
+    plt.imshow(label_arr, vmin=label_arr.min(), vmax=label_arr.max(), cmap="coolwarm")
     plt.savefig(label_dir / f"{step:04}.png", bbox_inches='tight', pad_inches=0)
     plt.clf()
 
     plt.axis('off')
-    plt.imshow(pred_arr, vmin=u_min, vmax=u_max, cmap="coolwarm")
+    plt.imshow(pred_arr, vmin=pred_arr.min(), vmax=pred_arr.max(), cmap="coolwarm")
     plt.savefig(pred_dir / f"{step:04}.png", bbox_inches='tight', pad_inches=0)
     plt.clf()
 

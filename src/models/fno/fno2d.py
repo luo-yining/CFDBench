@@ -111,6 +111,7 @@ class Fno2d(AutoCfdModel):
         self,
         in_chan: int,
         out_chan: int,
+        n_case_params: int,
         loss_fn: nn.Module,
         num_layers: int,
         modes1: int = 12,
@@ -129,6 +130,7 @@ class Fno2d(AutoCfdModel):
         """
         self.in_chan = in_chan
         self.out_chan = out_chan
+        self.n_case_params = n_case_params
         self.num_layers = num_layers
         self.modes1 = modes1
         self.modes2 = modes2
@@ -138,7 +140,7 @@ class Fno2d(AutoCfdModel):
         self.act_fn = nn.GELU()
         # Channel projection into `hidden_dim` channels
         # +7 because of coordinates (+2) and case params (+5)
-        self.fc0 = nn.Conv2d(in_chan + 2 + 5, self.hidden_dim, 1, 1, 0)
+        self.fc0 = nn.Conv2d(in_chan + 2 + n_case_params, self.hidden_dim, 1, 1, 0)
         # input channel is 12: the solution of the previous 10 timesteps + 2 locations
         # (u(t-10, x, y), ..., u(t-1, x, y),  x, y)
 

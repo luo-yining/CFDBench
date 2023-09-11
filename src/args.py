@@ -24,7 +24,7 @@ class Args(Tap):
     out_chan: int = 2
     """Number of output channels, only applicable to autoregressive models"""
 
-    batch_size: int = 32
+    batch_size: int = 128
     eval_batch_size: int = 16
 
     # Dataset hyperparamters

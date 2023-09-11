@@ -80,6 +80,7 @@ class ResNet(AutoCfdModel):
         self,
         in_chan: int,
         out_chan: int,
+        n_case_params: int,
         loss_fn: nn.Module,
         hidden_chan: int = 32,
         num_blocks: int = 4,
@@ -91,6 +92,7 @@ class ResNet(AutoCfdModel):
         assert in_chan == out_chan
         self.in_chan = in_chan
         self.out_chan = out_chan
+        self.n_case_params = n_case_params
         self.hidden_chan = hidden_chan
         self.num_blocks = num_blocks
         self.kernel_size = kernel_size
@@ -100,7 +102,7 @@ class ResNet(AutoCfdModel):
         # Create sequence of residual blocks
         blocks = [
             ResidualBlock(
-                in_chan + 1 + 5,  # +3 for case params
+                in_chan + 1 + n_case_params,  # +3 for case params
                 hidden_chan,
                 64,
                 kernel_size,
