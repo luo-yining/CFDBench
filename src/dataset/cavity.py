@@ -111,7 +111,7 @@ class CavityFlowDataset(CfdDataset):
         self.num_frames: List[int] = []
         features: List[Tensor] = []
         case_ids: List[int] = []  # The case ID of each example
-        self.all_features = List[np.ndarray] = []
+        self.all_features: List[np.ndarray] = []
 
         # Loop each frame in each case, create features labels
         for case_id, case_dir in enumerate(tqdm(case_dirs)):

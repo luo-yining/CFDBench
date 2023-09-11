@@ -9,6 +9,7 @@ import numpy as np
 import torch
 from torch import Tensor
 from torch.optim import Adam, lr_scheduler
+from tqdm import tqdm
 
 from dataset.base import CfdAutoDataset
 from dataset import get_auto_dataset
@@ -81,7 +82,7 @@ def evaluate(
     start_time = time.time()
     model.eval()
     with torch.inference_mode():
-        for step, batch in enumerate(loader):
+        for step, batch in enumerate(tqdm(loader)):
             # inputs, labels, case_params = batch
             inputs = batch["inputs"]  # (b, 2, h, w)
             labels = batch["label"]  # (b, 2, h, w)

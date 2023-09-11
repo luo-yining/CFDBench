@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 import numpy as np
 import torch
 from torch.optim import Adam, lr_scheduler
+from tqdm import tqdm
 
 from dataset import get_dataset, CfdDataset
 from models.base_model import CfdModel
@@ -61,7 +62,7 @@ def evaluate(
     start_time = time.time()
     model.eval()
     with torch.no_grad():
-        for step, batch in enumerate(loader):
+        for step, batch in enumerate(tqdm(loader)):
             case_params = batch["case_params"]  # (b, 5)
             label = batch["label"]
             t = batch["t"]  # (b, 1)
@@ -334,7 +335,7 @@ def main():
             data=test_data,
             output_dir=output_dir / "test",
             batch_size=1,
-            plot_interval=1,
+            plot_interval=10,
         )
 
 
