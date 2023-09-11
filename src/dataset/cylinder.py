@@ -272,6 +272,7 @@ class CylinderFlowAutoDataset(CfdAutoDataset):
         # Loop cases to create features and labels
         for case_id, case_dir in enumerate(case_dirs):
             case_features, this_case_params = load_case_data(case_dir)  # (T, c, h, w)
+            self.all_features.append(case_features)
             inputs = case_features[:-time_step_size, :]  # (T, 3, h, w)
             outputs = case_features[time_step_size:, :]  # (T, 3, h, w)
             assert len(inputs) == len(outputs)
@@ -302,6 +303,7 @@ class CylinderFlowAutoDataset(CfdAutoDataset):
                 all_inputs.append(inp)
                 all_labels.append(out)
                 all_case_ids.append(case_id)
+
         self.inputs = torch.stack(all_inputs)  # (num_samples, 3, h, w)
         self.labels = torch.stack(all_labels)  # (num_samples, 1, h, w)
         self.case_ids = all_case_ids

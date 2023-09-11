@@ -27,11 +27,11 @@ class AutoFfn(AutoCfdModel):
         act_norm: bool = False,
         act_name="relu",
     ):
-        '''
+        """
         Args:
         - branch_dim: int, the dimension of the branch net input.
         - trunk_dim: int, the dimension of the trunk net input.
-        '''
+        """
         super().__init__(loss_fn)
         self.input_field_dim = input_field_dim
         self.num_case_params = num_case_params
@@ -93,16 +93,16 @@ class AutoFfn(AutoCfdModel):
                 device=flat_inputs.device,
             )  # (k=h * w, 2)
 
-            n_queries = query_idxs.shape[0]
+        n_queries = query_idxs.shape[0]
 
-            # For each combination of (input, query_point), we have a sample.
-            # Repeat tensors such that we get (b * k) samples
-            # (b, k, h * w)
-            flat_inputs = flat_inputs.repeat(n_queries, 1)  # (b * k, h * w)
-            batch_query_idxs = query_idxs.repeat(batch_size, 1)  # (b * k, 2)
+        # For each combination of (input, query_point), we have a sample.
+        # Repeat tensors such that we get (b * k) samples
+        # (b, k, h * w)
+        flat_inputs = flat_inputs.repeat(n_queries, 1)  # (b * k, h * w)
+        batch_query_idxs = query_idxs.repeat(batch_size, 1)  # (b * k, 2)
 
-            # (b * k, h * w + 2)
-            flat_inputs = torch.cat([flat_inputs, batch_query_idxs.float()], dim=1)
+        # (b * k, h * w + 2)
+        flat_inputs = torch.cat([flat_inputs, batch_query_idxs.float()], dim=1)
 
         preds = self.ffn(flat_inputs)  # (b * k, 1)
         preds = preds.view(batch_size, -1)  # (b, k)
@@ -125,29 +125,31 @@ class AutoFfn(AutoCfdModel):
         preds = preds.view(-1, 1, height, width)  # (b, 1, h, w)
         return dict(preds=preds)
 
-    def generate(self, x: Tensor, case_params: Tensor) -> Tensor:
+    def generate(self, inputs: Tensor, case_params: Tensor, mask: Tensor) -> Tensor:
         """
         x: (c, h, w) or (B, c, h, w)
 
         Returns:
             (b, c, h, w)
         """
-        if x.dim() == 3:
-            x = x.unsqueeze(0)  # (1, c, h, w)
-        batch_size, num_chan, height, width = x.shape
+        if inputs.dim() == 3:
+            inputs = inputs.unsqueeze(0)  # (1, c, h, w)
+        batch_size, num_chan, height, width = inputs.shape
         query_idxs = torch.tensor(
             list(product(range(height), range(width))),
             dtype=torch.long,
-            device=x.device,
+            device=inputs.device,
         )  # (h * w, 2)
         # query_points = query_points / 100
         # (b, 1, h * w)
-        preds = self.forward(x, query_idxs=query_idxs, case_params=case_params)['preds']
+        preds = self.forward(
+            inputs, query_idxs=query_idxs, case_params=case_params, mask=mask
+        )["preds"]
         preds = preds.view(-1, 1, height, width)  # (b, 1, h, w)
         return preds
 
     def generate_many(
-        self, x: Tensor, case_params: Tensor, steps: int
+        self, inputs: Tensor, case_params: Tensor, mask: Tensor, steps: int,
     ) -> List[Tensor]:
         """
         x: (c, h, w) or (B, c, h, w)
@@ -157,12 +159,14 @@ class AutoFfn(AutoCfdModel):
         Returns:
             list of tensors, each of shape (b, c, h, w)
         """
-        if x.dim() == 3:
-            x = x.unsqueeze(0)  # (1, c, h, w)
-        cur_frame = x
+        if inputs.dim() == 3:
+            inputs = inputs.unsqueeze(0)  # (1, c, h, w)
+            case_params = case_params.unsqueeze(0)  # (1, p)
+            mask = mask.unsqueeze(0)  # (1, h, w)
+        cur_frame = inputs
         frames = [cur_frame]
         for _ in range(steps):
             # (b, c, h, w)
-            cur_frame = self.generate(cur_frame, case_params=case_params)
+            cur_frame = self.generate(cur_frame, case_params=case_params, mask=None)
             frames.append(cur_frame)
         return frames

@@ -179,12 +179,13 @@ class AutoDeepONet(AutoCfdModel):
         self, inputs: Tensor, case_params: Tensor, mask: Tensor, steps: int
     ) -> List[Tensor]:
         """
-                x: (c, h, w) or (B, c, h, w)
-                mask: (h, w). 1 for interior, 0 for boundaries.
-                steps: int, number of steps to generate.
-        F
-                Returns:
-                    list of tensors, each of shape (b, c, h, w)
+        Args:
+            x: (c, h, w) or (B, c, h, w)
+            mask: (h, w). 1 for interior, 0 for boundaries.
+            steps: int, number of steps to generate.
+
+        Returns:
+            list of tensors, each of shape (b, c, h, w)
         """
         assert len(inputs.shape) == len(case_params.shape) + 2
         if inputs.dim() == 3:

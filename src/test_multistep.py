@@ -59,14 +59,15 @@ def combine_dicts(dicts: List[dict]) -> dict:
 def infer_case(
     model: AutoCfdModel, case_features: Tensor, case_params: Tensor, infer_steps: int
 ):
-    start_frame = case_features[0, :-1]
-    mask = case_features[0, -1]
-    preds = model.generate_many(
-        inputs=start_frame,
-        case_params=case_params,
-        mask=mask,
-        steps=infer_steps,
-    )
+    with torch.no_grad():
+        start_frame = case_features[0, :-1]
+        mask = case_features[0, -1]
+        preds = model.generate_many(
+            inputs=start_frame,
+            case_params=case_params,
+            mask=mask,
+            steps=infer_steps,
+        )
     return preds
 
 
@@ -74,6 +75,7 @@ def infer(
     model, all_features: List[Tensor], all_case_params: List[Tensor], infer_steps: int
 ):
     n_cases = len(all_features)
+    print(f"Number of cases: {n_cases}")
     all_preds = []
     for case_id in range(n_cases):
         case_features = all_features[case_id]
@@ -85,6 +87,7 @@ def infer(
     # Compute metrics
     all_metrics = []
     for step in range(infer_steps):
+        # print(step)
         step_metrics = []
         for case_id in range(n_cases):
             # The last channel is mask
@@ -123,6 +126,7 @@ def main():
         norm_props=bool(args.norm_props),
         norm_bc=bool(args.norm_bc),
     )
+    print("Test data size:", len(test_data))
     infer_steps = 20
     all_features = test_data.all_features
     all_case_params = test_data.case_params
@@ -140,6 +144,9 @@ def main():
     # Turn case params into tensors
     for case_id, case_params in enumerate(all_case_params):
         all_case_params[case_id] = case_params_to_tensor(case_params).to("cuda")
+
+    # print("Number of cases:", len(all_features))
+    # exit()
 
     # Load model
     model = init_model(args)
