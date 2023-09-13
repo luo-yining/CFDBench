@@ -79,6 +79,10 @@ The implementation of the models is located in `src/models`
 
 ## Main Results
 
+### Multi-Step Inference
+
+![multi-step-results](figs/result-multistep-infer.png)
+
 ### Autoregressive Models
 
 ![autoregressive-results](figs/result-auto-summary.png)
