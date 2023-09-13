@@ -1,12 +1,23 @@
-# CFDBench
+# <div style="text-align: center;">CFDBench</div>
 
-The code for the paper: [[upcoming] CFDBench: a comprehensive benchmark for data-driven methods for fluid dynamics](www.unknown.com).
+<div style="text-align: center;">
+    Yining Luo, Yingfa Chen, and Zhen Zhang</br>
+    Tsinghua University
+</div>
+
+<div></br></div>
+
+![flow-examples](figs/flow-examples.png)
+
+The code for the paper: [[Upcoming] CFDBench: A Comprehensive Benchmark for Machine Learning Methods in Fluid Dynamics](www.unknown.com).
 
 ## Data Generation
 
 The directory `generation-code` contains the code for creating the mesh (ICEM code) and the schema code for batch generation in ANSYS Fluent.
 
 > This part takes a lot of time, and you are better off just using our generated data instead.
+
+The raw generated data is too large for our school's cloud storage. We will send your the raw data directly upon request by email.
 
 ## Data Interpolation
 
@@ -45,6 +56,8 @@ The actual data for each velocity field is stored in `u.npy` and `v.npy`.
 
 ## Models
 
+![models](figs/input-output-overview.png)
+
 The basic types of models are autoregressive and non-autoregressive:
 
 - Autoregressive:
@@ -62,7 +75,17 @@ The basic types of models are autoregressive and non-autoregressive:
 
 The implementation of the models is located in `src/models`
 
-## How to Run
+## Main Results
+
+### Autoregressive Models
+
+![autoregressive-results](figs/result-auto-summary.png)
+
+### Nonautoregressive Models
+
+![nonautoregressive-results](figs/result-nonauto.png)
+
+## How to Run?
 
 ### Prepare Data
 
@@ -109,3 +132,35 @@ Set `--mode test` when executing `train.py` or `train_auto.py`.
 ### Hardware Requirements
 
 See the Results section in the paper. Reduce the batch size if you run out of VRAM.
+
+## How to Add New Models/Dataset?
+
+Our code is highly extensible and modular, and it is very easy to add new dataset or models.
+
+### Models
+
+To add a new model, simply create a class that inherits one of the following base models:
+
+- `CfdModel`: If your model is nonautoregressive
+- `AutoCfdModel`: If your model is autoregressive
+
+Then depending on which base model, you have to implement just 2 or 3 methods in addition to the model architecture itself.
+
+- Nonautoregressive: `forward`, `generate_one`.
+- Autoregressive: `forward`, `generate_one` and `generate_many`.
+
+### Dataset
+
+Upcoming.
+
+## Citation
+
+If you find this code useful, please cite our paper:
+
+```
+@article{CFDBench,
+  title={CFDBench: A Comprehensive Benchmark for Machine Learning Methods in Fluid Dynamics},
+  author={Yining, Luo and Yingfa, Chen and Zhen, Zhang},
+  year={2023}
+}
+```
