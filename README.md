@@ -9,7 +9,9 @@
 
 ![flow-examples](figs/flow-examples.png)
 
-The code for the paper: [[Upcoming] CFDBench: A Comprehensive Benchmark for Machine Learning Methods in Fluid Dynamics](www.unknown.com).
+This is the code for the paper: [[Upcoming] CFDBench: A Comprehensive Benchmark for Machine Learning Methods in Fluid Dynamics](www.unknown.com).
+
+CFDBench is a large-scale and comprehensive benchmark for better evaluating machine learning methods in fluid dynamics. It consists of four classic problems in computational fluid dynamics (CFD), with many varying operating parameters such as boundary conditions, domain geometries and physical properties.
 
 ## Data Generation
 

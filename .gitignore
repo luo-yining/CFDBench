@@ -2,3 +2,4 @@ __pycache__
 .vscode
 images
 data
+.DS_Store
