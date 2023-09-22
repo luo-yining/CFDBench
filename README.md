@@ -1,9 +1,17 @@
-# <div style="text-align: center;">CFDBench</div>
+# <div align="center">CFDBench</div>
 
-<div style="text-align: center;">
+<div align="center">
     Yining Luo, Yingfa Chen, and Zhen Zhang</br>
     Tsinghua University
 </div>
+
+Main links:
+
+- [data](https://cloud.tsinghua.edu.cn/d/435413b55dea434297d1/)
+- Paper:
+    - [ArXiv (upcoming)]()
+    - [Preprints.org](https://www.preprints.org/manuscript/202309.1550/v1)
+
 
 <div></br></div>
 
