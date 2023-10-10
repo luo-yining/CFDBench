@@ -1,5 +1,5 @@
 from torch import nn, Tensor
-from typing import Optional
+from typing import Optional, List
 
 from .loss import MseLoss
 
@@ -73,7 +73,7 @@ class AutoCfdModel(nn.Module):
         mask: Tensor,
         steps: int,
         **kwargs,
-    ):
+    ) -> List[Tensor]:
         """
         Given a frame `inputs`, generate the next `steps` frames.
         """

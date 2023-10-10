@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import numpy as np
 import torch
@@ -10,8 +10,47 @@ import matplotlib.pyplot as plt
 from args import Args
 from utils import load_best_ckpt, get_output_dir, dump_json
 from dataset import get_auto_dataset
-from models.base_model import AutoCfdModel
-from utils_auto import init_model
+from models.base_model import AutoCfdModel, CfdModel
+from utils_auto import init_model as init_auto_model
+from models.ffn import FfnModel
+from models.deeponet import DeepONet
+from models.loss import loss_name_to_fn
+
+
+def init_model(args: Args) -> CfdModel:
+    print(f"Initting {args.model}")
+    loss_fn = loss_name_to_fn(args.loss_name)
+    query_coord_dim = 3  # (t, x, y)
+    if "cylinder" in args.data_name:
+        # (density, viscosity, u_top, h, w, radius, center_x, center_y)
+        n_case_params = 8
+    else:
+        n_case_params = 5  # (density, viscosity, u_top, h, w)
+    if args.model == "deeponet":
+        model = DeepONet(
+            branch_dim=n_case_params,
+            trunk_dim=query_coord_dim,
+            loss_fn=loss_fn,
+            width=args.deeponet_width,
+            trunk_depth=args.trunk_depth,
+            branch_depth=args.branch_depth,
+            act_name=args.act_fn,
+            act_norm=bool(args.act_scale_invariant),
+            act_on_output=bool(args.act_on_output),
+        ).cuda()
+    elif args.model == "ffn":
+        widths = (
+            [n_case_params + query_coord_dim] + [args.ffn_width] * args.ffn_depth + [1]
+        )
+        model = FfnModel(
+            widths=widths,
+            loss_fn=loss_fn,
+        ).cuda()
+    else:
+        raise ValueError(f"Invalid model name: {args.model}")
+    num_params = sum(p.numel() for p in model.parameters())
+    print(f"Model has {num_params} parameters")
+    return model
 
 
 def plot_metrics(metrics: List[dict], out_path: Optional[Path] = None):
@@ -21,7 +60,7 @@ def plot_metrics(metrics: List[dict], out_path: Optional[Path] = None):
         plt.plot(values, label=key.upper())
     plt.legend()
     plt.xlabel("Steps")
-    plt.yscale('log')
+    plt.yscale("log")
     # plt.title("Temporal extrapolation of Auto-DeepONet")
     if out_path is None:
         plt.show()
@@ -57,18 +96,36 @@ def combine_dicts(dicts: List[dict]) -> dict:
 
 
 def infer_case(
-    model: AutoCfdModel, case_features: Tensor, case_params: Tensor, infer_steps: int
+    model: Union[AutoCfdModel, CfdModel],
+    case_features: Tensor,
+    case_params: Tensor,
+    infer_steps: int,
 ):
     with torch.no_grad():
-        start_frame = case_features[0, :-1]
-        mask = case_features[0, -1]
-        preds = model.generate_many(
-            inputs=start_frame,
-            case_params=case_params,
-            mask=mask,
-            steps=infer_steps,
-        )
-    return preds
+        if isinstance(model, AutoCfdModel):
+            start_frame = case_features[0, :-1]
+            mask = case_features[0, -1]
+            preds = model.generate_many(
+                inputs=start_frame,
+                case_params=case_params,
+                mask=mask,
+                steps=infer_steps,
+            )
+            return preds
+        elif isinstance(model, CfdModel):
+            preds = []
+            for step in range(infer_steps):
+                t = torch.tensor([step], dtype=torch.float32).to("cuda")
+                pred = model.generate_one(
+                    case_params=case_params,
+                    t=t,
+                    height=case_features.shape[2],
+                    width=case_features.shape[3],
+                )
+                preds.append(pred)
+            return preds
+        else:
+            raise NotImplementedError
 
 
 def infer(
@@ -125,6 +182,7 @@ def main():
         delta_time=args.delta_time,
         norm_props=bool(args.norm_props),
         norm_bc=bool(args.norm_bc),
+        load_splits=["test"],
     )
     print("Test data size:", len(test_data))
     infer_steps = 20
@@ -149,14 +207,18 @@ def main():
     # exit()
 
     # Load model
-    model = init_model(args)
-    output_dir = get_output_dir(args, is_auto=True)
+    is_autoregressive = args.model not in ["deeponet", "ffn"]
+    if args.model in ["deeponet", "ffn"]:
+        model = init_model(args)
+    else:
+        model = init_auto_model(args)
+    output_dir = get_output_dir(args, is_auto=is_autoregressive)
     load_best_ckpt(model, output_dir)
 
     print("====== Start inference ======")
     all_metrics = infer(model, all_features, all_case_params, infer_steps)
     dump_json(all_metrics, output_dir / "multistep_metrics.json")
-    plot_metrics(all_metrics, output_dir / 'multistep_metrics.pdf')
+    plot_metrics(all_metrics, output_dir / "multistep_metrics.pdf")
 
 
 if __name__ == "__main__":

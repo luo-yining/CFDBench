@@ -212,7 +212,12 @@ class DeepONet(CfdModel):
         Returns:
             (b, c, h, w)
         """
-        # batch_size, num_chan, height, width = x_branch.shape
+        if len(case_params.shape) == 1:
+            case_params = case_params.unsqueeze(0)
+        if len(t.shape) == 0:
+            t = t.unsqueeze(0).unsqueeze(0)
+        elif len(t.shape) == 1:
+            t = t.unsqueeze(0)
 
         # Create 2D lattice of query points to infer the frame.
         query_idxs = torch.tensor(

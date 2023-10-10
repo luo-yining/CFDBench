@@ -75,6 +75,8 @@ class AutoFfn(AutoCfdModel):
 
         # Add mask to input as additional channels
         if mask is not None:
+            if mask.dim() == 2:
+                mask = mask.unsqueeze(0).unsqueeze(1)  # (1, 1, h, w)
             if mask.dim() == 3:
                 mask = mask.unsqueeze(1)  # (B, 1, h, w)
             inputs = torch.cat([inputs, mask], dim=1)  # (B, c + 1, h, w)
@@ -164,9 +166,9 @@ class AutoFfn(AutoCfdModel):
             case_params = case_params.unsqueeze(0)  # (1, p)
             mask = mask.unsqueeze(0)  # (1, h, w)
         cur_frame = inputs
-        frames = [cur_frame]
+        preds = []
         for _ in range(steps):
             # (b, c, h, w)
             cur_frame = self.generate(cur_frame, case_params=case_params, mask=None)
-            frames.append(cur_frame)
-        return frames
+            preds.append(cur_frame)
+        return preds

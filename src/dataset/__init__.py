@@ -66,6 +66,7 @@ def get_auto_dataset(
     delta_time: float,
     norm_props: bool,
     norm_bc: bool,
+    load_splits: list = ['train', 'dev', 'test'],
 ) -> Tuple[CfdAutoDataset, CfdAutoDataset, CfdAutoDataset]:
     """
     Args:
@@ -111,6 +112,7 @@ def get_auto_dataset(
             norm_props=norm_props,
             norm_bc=norm_bc,
             delta_time=delta_time,
+            load_splits=load_splits,
         )
         return train_data, dev_data, test_data
     else:

@@ -74,7 +74,7 @@ def init_model(args: Args) -> AutoCfdModel:
         return model
     elif args.model == "auto_deeponet_cnn":
         model = AutoDeepONetCnn(
-            in_chan=3,  # (u, v, p)
+            in_chan=args.in_chan + 1,  # mask is not included
             height=n_rows,
             width=n_cols,
             num_case_params=n_case_params,

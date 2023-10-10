@@ -238,8 +238,6 @@ class UNet(AutoCfdModel):
         return preds
 
     def generate(self, inputs: Tensor, case_params: Tensor, mask: Tensor) -> Tensor:
-        # print(x.shape)
-        # print(mask.shape)
         outputs = self.forward(inputs, case_params=case_params, mask=mask)
         preds = outputs["preds"]
         return preds

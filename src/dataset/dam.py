@@ -258,9 +258,11 @@ class DamFlowAutoDataset(CfdAutoDataset):
         all_inputs: List[Tensor] = []
         all_labels: List[Tensor] = []
         all_case_ids: List[int] = []
+        self.all_features: List[Tensor] = []
 
         for case_id, case_dir in enumerate(case_dirs):
             case_features, this_case_params = load_case_data(case_dir)  # (T, c, h, w)
+            self.all_features.append(case_features)
             inputs = case_features[:-time_step_size, :]  # (T, 3, h, w)
             outputs = case_features[time_step_size:, :]  # (T, 3, h, w)
             assert len(inputs) == len(outputs)

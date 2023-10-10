@@ -384,6 +384,7 @@ def get_cylinder_auto_datasets(
     delta_time: float = 0.01,
     stable_state_diff: float = 0.001,
     seed: int = 0,
+    load_splits: List[str] = ['train', 'dev', 'test'],
 ) -> Tuple[CylinderFlowAutoDataset, CylinderFlowAutoDataset, CylinderFlowAutoDataset]:
     print(data_dir, subset_name)
     case_dirs = []
@@ -421,9 +422,18 @@ def get_cylinder_auto_datasets(
         norm_bc=norm_bc,
         cache_dir=Path('./dataset/cache/cylinder', subset_name)
     )
-    train_data = CylinderFlowAutoDataset(train_case_dirs, split='train', **kwargs)
-    dev_data = CylinderFlowAutoDataset(dev_case_dirs, split='dev', **kwargs)
-    test_data = CylinderFlowAutoDataset(test_case_dirs, split='test', **kwargs)
+    if 'train' in load_splits:
+        train_data = CylinderFlowAutoDataset(train_case_dirs, split='train', **kwargs)
+    else:
+        train_data = None
+    if 'dev' in load_splits:
+        dev_data = CylinderFlowAutoDataset(dev_case_dirs, split='dev', **kwargs)
+    else:
+        dev_data = None
+    if 'test' in load_splits:
+        test_data = CylinderFlowAutoDataset(test_case_dirs, split='test', **kwargs)
+    else:
+        test_data = None
     return train_data, dev_data, test_data
 
 

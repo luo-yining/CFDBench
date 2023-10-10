@@ -164,28 +164,34 @@ class AutoDeepONetCnn(AutoCfdModel):
         preds = preds.view(-1, 1, height, width)  # (b, 1, h, w)
         return dict(preds=preds)
 
-    def generate(self, x: Tensor, case_params: Tensor) -> Tensor:
+    def generate(self, inputs: Tensor, case_params: Tensor, mask: Tensor) -> Tensor:
         """
         x: (c, h, w) or (B, c, h, w)
 
         Returns:
             (b, c, h, w)
         """
-        if x.dim() == 3:
-            x = x.unsqueeze(0)  # (1, c, h, w)
-        batch_size, num_chan, height, width = x.shape
+        if inputs.dim() == 3:
+            inputs = inputs.unsqueeze(0)  # (1, c, h, w)
+            case_params = case_params.unsqueeze(0)  # (1, p)
+            mask = mask.unsqueeze(0)  # (1, h, w)
+        batch_size, num_chan, height, width = inputs.shape
         query_idxs = torch.tensor(
             list(product(range(height), range(width))),
             dtype=torch.long,
-            device=x.device,
+            device=inputs.device,
         )  # (h * w, 2)
         # query_points = query_points / 100
         # (b, 1, h * w)
-        preds = self.forward(x, query_idxs=query_idxs, case_params=case_params)["preds"]
+        preds = self.forward(
+            inputs, query_idxs=query_idxs, case_params=case_params, mask=mask
+        )["preds"]
         preds = preds.view(-1, 1, height, width)  # (b, 1, h, w)
         return preds
 
-    def generate_many(self, x: Tensor, case_params: Tensor, steps: int) -> List[Tensor]:
+    def generate_many(
+        self, inputs: Tensor, case_params: Tensor, mask: Tensor, steps: int
+    ) -> List[Tensor]:
         """
         x: (c, h, w) or (B, c, h, w)
         mask: (h, w). 1 for interior, 0 for boundaries.
@@ -194,12 +200,16 @@ class AutoDeepONetCnn(AutoCfdModel):
         Returns:
             list of tensors, each of shape (b, c, h, w)
         """
-        if x.dim() == 3:
-            x = x.unsqueeze(0)  # (1, c, h, w)
-        cur_frame = x
-        frames = [cur_frame]
+        if inputs.dim() == 3:
+            inputs = inputs.unsqueeze(0)  # (1, c, h, w)
+            case_params = case_params.unsqueeze(0)  # (1, p)
+            mask = mask.unsqueeze(0)  # (1, h, w)
+        cur_frame = inputs
+        p = inputs[:, -1:]
+        preds = []
         for _ in range(steps):
             # (b, c, h, w)
-            cur_frame = self.generate(cur_frame, case_params=case_params)
-            frames.append(cur_frame)
-        return frames
+            cur_frame = self.generate(cur_frame, case_params=case_params, mask=mask)
+            preds.append(cur_frame)
+            cur_frame = torch.cat([cur_frame, p], dim=1)
+        return preds

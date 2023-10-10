@@ -11,9 +11,8 @@ from .act_fn import get_act_fn
 
 class Ffn(nn.Module):
     """
-    A fully connected multi-layer neural network.
+    A general fully connected multi-layer neural network.
     """
-
     def __init__(self, dims: list, act_fn: nn.Module, act_on_output: bool = False):
         super().__init__()
         self.dims = dims
@@ -35,7 +34,7 @@ class Ffn(nn.Module):
 
 class FfnModel(CfdModel):
     """
-    DeepONet for CFD.
+    Non-autoregressive FNN for data-driven CFD.
 
     Branch net accepts the boundary and physics properties as inputs.
     Trunk net accepts the query location (t, x, y) as input.
@@ -50,11 +49,11 @@ class FfnModel(CfdModel):
         act_on_output: bool = False,
         num_label_samples: int = 1000,
     ):
-        '''
+        """
         Args:
         - branch_dim: int, the dimension of the branch net input.
         - trunk_dim: int, the dimension of the trunk net input.
-        '''
+        """
         super().__init__(loss_fn)
         self.loss_fn = loss_fn
         self.widths = widths
@@ -64,9 +63,7 @@ class FfnModel(CfdModel):
         self.num_label_samples = num_label_samples
 
         act_fn = get_act_fn(act_name, act_norm)
-        self.ffn = Ffn(
-            self.widths, act_fn=act_fn, act_on_output=self.act_on_output
-        )
+        self.ffn = Ffn(self.widths, act_fn=act_fn, act_on_output=self.act_on_output)
 
     def forward(
         self,
@@ -142,15 +139,20 @@ class FfnModel(CfdModel):
         Generate one frame at time t.
 
         Args:
-        - x_branch: Tensor, (b, branch_dim)
-        - t: Tensor, (b)
+        - x_branch: Tensor, (branch_dim)
+        - t: Tensor, (1,)
         - height: int
         - width: int
 
         Returns:
             (b, c, h, w)
         """
-        # batch_size, num_chan, height, width = x_branch.shape
+        if len(case_params.shape) == 1:
+            case_params = case_params.unsqueeze(0)
+        if len(t.shape) == 0:
+            t = t.unsqueeze(0).unsqueeze(0)
+        elif len(t.shape) == 1:
+            t = t.unsqueeze(0)
 
         # Create 2D lattice of query points to infer the frame.
         query_idxs = torch.tensor(

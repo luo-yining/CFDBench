@@ -157,8 +157,9 @@ class ResNet(AutoCfdModel):
         residual = inputs[:, :self.out_chan]
         if mask is not None:
             if mask.dim() == 2:
-                mask = mask.unsqueeze(0)
-            # mask = mask.unsqueeze(1)  # (B, 1, h, w)
+                mask = mask.unsqueeze(0).unsqueeze(1)  # (1, 1, h, w) 2:
+            if mask.dim() == 3:
+                mask = mask.unsqueeze(1)  # (b, 1, h, w)
             inputs = torch.cat([inputs, mask], dim=1)  # (B, c + 1, h, w)
 
         # Add case params as additional channels
@@ -190,12 +191,12 @@ class ResNet(AutoCfdModel):
         """
         outputs = self.forward(inputs, case_params=case_params, mask=mask)
         preds = outputs["preds"]
-        if mask is not None:
-            return preds * mask + (1 - mask) * inputs[:, 0]
+        # if mask is not None:
+            # return preds * mask + (1 - mask) * inputs
         return preds
 
     def generate_many(
-        self, x: Tensor, case_params: Tensor, steps: int, mask: Optional[Tensor] = None
+        self, inputs: Tensor, case_params: Tensor, steps: int, mask: Optional[Tensor] = None
     ):
         """
         x: (c, h, w)
@@ -204,13 +205,14 @@ class ResNet(AutoCfdModel):
         Returns:
             (steps, c, h, w)
         """
-        frames = []
-        cur_frame = x[:2].unsqueeze(0)  # (1, c, h, w)
+        if inputs.dim() == 3:
+            inputs = inputs.unsqueeze(0)  # (1, c, h, w)
+            case_params = case_params.unsqueeze(0)  # (1, p)
+            mask = mask.unsqueeze(0)  # (1, h, w)
+        cur_frame = inputs  # (1, c, h, w)
+        frames = [cur_frame]
         boundaries = (1 - mask) * cur_frame  # (1, c, h, w)
-        mask = mask.unsqueeze(0)  # (1, h, w)
-        mask = mask.unsqueeze(1)  # (1, 1, h, w)
         for _ in range(steps):
-            outputs = self.forward(cur_frame, case_params=case_params, mask=mask)
-            cur_frame = outputs * mask + boundaries
-            frames.append(cur_frame.squeeze(0))
+            cur_frame = self.generate(cur_frame, case_params=case_params, mask=mask)
+            frames.append(cur_frame)
         return frames
