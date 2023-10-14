@@ -1,37 +1,33 @@
-# <div align="center">CFDBench</div>
+<h1 align="center">CFDBench</h1>
+
+<div align="center">
+    <a href="https://cloud.tsinghua.edu.cn/d/435413b55dea434297d1/">Data</a> | <a href="https://www.preprints.org/manuscript/202309.1550/v1">Paper (preprint)</a>
+</div>
 
 <div align="center">
     Yining Luo, Yingfa Chen, and Zhen Zhang</br>
     Tsinghua University
 </div>
 
-Main links:
-
-- [data](https://cloud.tsinghua.edu.cn/d/435413b55dea434297d1/)
-- Paper:
-    - [ArXiv (upcoming)]()
-    - [Preprints.org](https://www.preprints.org/manuscript/202309.1550/v1)
-
-
 <div></br></div>
 
 ![flow-examples](figs/flow-examples.png)
 
-This is the code for the paper: [[Upcoming] CFDBench: A Comprehensive Benchmark for Machine Learning Methods in Fluid Dynamics](www.unknown.com).
+This is the code for the paper: [CFDBench: A Comprehensive Benchmark for Machine Learning Methods in Fluid Dynamics](https://www.preprints.org/manuscript/202309.1550/v1).
 
-CFDBench is a large-scale and comprehensive benchmark for better evaluating machine learning methods in fluid dynamics. It consists of four classic problems in computational fluid dynamics (CFD), with many varying operating parameters such as boundary conditions, domain geometries and physical properties.
+CFDBench is a large-scale and comprehensive benchmark for better evaluating machine learning methods in fluid dynamics. It consists of four classic problems in computational fluid dynamics (CFD), with many varying operating parameters such as boundary conditions, domain geometries, and physical properties.
 
 ## Data Generation
 
 The directory `generation-code` contains the code for creating the mesh (ICEM code) and the schema code for batch generation in ANSYS Fluent.
 
-> This part takes a lot of time, and you are better off just using our generated data instead.
+> This part takes a lot of time, and you are better off using our generated data instead.
 
-The raw generated data is too large for our school's cloud storage. We will send your the raw data directly upon request by email.
+The raw generated data is too large for our school's cloud storage. We will send you the raw data directly upon request by email.
 
 ## Data Interpolation
 
-After generating data with numerical algorithms, it is then interpolated to a grid of 64x64. The raw data before interpolation is very large, and the below link is the interpolated data.
+After generating data with numerical algorithms, it is then interpolated to a grid of 64x64. The raw data before interpolation is very large; the link below is the interpolated data.
 
 Main download link: [[click here]](https://cloud.tsinghua.edu.cn/d/435413b55dea434297d1/)
 
@@ -44,7 +40,7 @@ Contains 4 problems:
 
 > The cylinder flow is separated into three files because the file size exceeds the upload limit.
 
-Each dataset includes 3 subsets, corresponding to changing BCs, domain geometries and physical properties.
+Each dataset includes 3 subsets, corresponding to changing BCs, domain geometries, and physical properties.
 
 The directory tree for the datasets:
 
@@ -149,7 +145,7 @@ See the Results section in the paper. Reduce the batch size if you run out of VR
 
 ## How to Add New Models/Dataset?
 
-Our code is highly extensible and modular, and it is very easy to add new dataset or models.
+Our code is highly extensible and modular, and it is very easy to add new datasets or models.
 
 ### Models
 
@@ -161,7 +157,7 @@ To add a new model, simply create a class that inherits one of the following bas
 Then depending on which base model, you have to implement just 2 or 3 methods in addition to the model architecture itself.
 
 - Nonautoregressive: `forward`, `generate_one`.
-- Autoregressive: `forward`, `generate_one` and `generate_many`.
+- Autoregressive: `forward`, `generate_one`, and `generate_many`.
 
 ### Dataset
 
