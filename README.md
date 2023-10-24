@@ -1,7 +1,8 @@
 <h1 align="center">CFDBench</h1>
 
 <div align="center">
-    <a href="https://cloud.tsinghua.edu.cn/d/435413b55dea434297d1/">Data</a> | <a href="https://www.preprints.org/manuscript/202309.1550/v1">Paper (preprint)</a>
+    <a href="https://cloud.tsinghua.edu.cn/d/435413b55dea434297d1/">Data</a> | <a href="https://www.preprints.org/manuscript/202309.1550/v1">Paper (preprints.org)</a> |
+    <a href="https://arxiv.org/abs/2310.05963">Paper (arXiv)</a>
 </div>
 
 <div align="center">
