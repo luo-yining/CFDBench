@@ -56,37 +56,33 @@ class AutoFfn(AutoCfdModel):
         inputs: Tensor,
         case_params: Tensor,
         label: Optional[Tensor] = None,
-        mask: Optional[Tensor] = None,
+        mask: Optional[Tensor] = None,  # NOTE: Not used
         query_idxs: Optional[Tensor] = None,
     ):
         """
         Here, we just randomly sample some points, and use the label values on
         those points as the label.
 
-        x: (b, c, h, w)
-        labels: (b, c, h, w)
-        query_point: (k, 2), k is the number of query points, each is an (x, y)
-            coordinate.
+        ### Parameters
+        - `inputs: Tensor` -- (b, c, h, w)
+        - `labels: Tensor` -- (b, c, h, w)
+        - `query_idxs: Tensor` -- (k, 2), k is the number of query points,
+            each is an (x, y) coordinate.
+        - `mask: Tensor` -- Not used.
 
-        Goal:
-        Input: [b, branch_dim + trunk_dim]
-        Output: [b, 1]
+        ### Function
+            Input: [b, branch_dim + trunk_dim]
+            Output: [b, 1]
         """
-
-        # Add mask to input as additional channels
-        if mask is not None:
-            if mask.dim() == 2:
-                mask = mask.unsqueeze(0).unsqueeze(1)  # (1, 1, h, w)
-            if mask.dim() == 3:
-                mask = mask.unsqueeze(1)  # (B, 1, h, w)
-            inputs = torch.cat([inputs, mask], dim=1)  # (B, c + 1, h, w)
-
         batch_size, _num_chan, height, width = inputs.shape
 
         # Only use the u channel
         inputs = inputs[:, 0]  # (B, h, w)
+        # Flatten
         flat_inputs = inputs.view(batch_size, -1)  # (B, h * w)
-        flat_inputs = torch.cat([flat_inputs, case_params], dim=1)  # (B, h * w + 2)
+        flat_inputs = torch.cat(
+            [flat_inputs, case_params], dim=1
+        )  # (B, h * w + 2)
 
         if query_idxs is None:
             query_idxs = torch.tensor(
@@ -127,7 +123,9 @@ class AutoFfn(AutoCfdModel):
         preds = preds.view(-1, 1, height, width)  # (b, 1, h, w)
         return dict(preds=preds)
 
-    def generate(self, inputs: Tensor, case_params: Tensor, mask: Tensor) -> Tensor:
+    def generate(
+        self, inputs: Tensor, case_params: Tensor, mask: Tensor
+    ) -> Tensor:
         """
         x: (c, h, w) or (B, c, h, w)
 
@@ -151,7 +149,11 @@ class AutoFfn(AutoCfdModel):
         return preds
 
     def generate_many(
-        self, inputs: Tensor, case_params: Tensor, mask: Tensor, steps: int,
+        self,
+        inputs: Tensor,
+        case_params: Tensor,
+        mask: Tensor,
+        steps: int,
     ) -> List[Tensor]:
         """
         x: (c, h, w) or (B, c, h, w)
@@ -169,6 +171,8 @@ class AutoFfn(AutoCfdModel):
         preds = []
         for _ in range(steps):
             # (b, c, h, w)
-            cur_frame = self.generate(cur_frame, case_params=case_params, mask=None)
+            cur_frame = self.generate(
+                cur_frame, case_params=case_params, mask=mask
+            )
             preds.append(cur_frame)
         return preds

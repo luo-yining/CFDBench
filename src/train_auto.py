@@ -42,7 +42,9 @@ def collate_fn(batch: list):
     inputs = inputs[:, :-1]  # (b, 2, h, w)
 
     # Case params is a dict, turn it into a tensor
-    keys = [x for x in case_params[0].keys() if x not in ["rotated", "dx", "dy"]]
+    keys = [
+        x for x in case_params[0].keys() if x not in ["rotated", "dx", "dy"]
+    ]
     case_params_vec = []
     for case_param in case_params:
         case_params_vec.append([case_param[k] for k in keys])
@@ -88,7 +90,9 @@ def evaluate(
             labels = batch["label"]  # (b, 2, h, w)
 
             # Compute difference between the input and label
-            input_loss: dict = model.loss_fn(labels=labels[:, :1], preds=inputs[:, :1])
+            input_loss: dict = model.loss_fn(
+                labels=labels[:, :1], preds=inputs[:, :1]
+            )
             for key in input_scores:
                 input_scores[key].append(input_loss[key].cpu().tolist())
 
@@ -189,13 +193,27 @@ def train(
     eval_interval: int = 2,
     measure_time: bool = False,
 ):
+    """
+    Main function for training.
+
+    ### Parameters
+    - model
+    - train_data
+    - dev_data
+    - output_dir
+    ...
+    - log_interval: log loss, learning rate etc. every `log_interval` steps.
+    - measure_time: if `True`, will only run one epoch and print the time.
+    """
     train_loader = DataLoader(
         train_data, batch_size=batch_size, shuffle=True, collate_fn=collate_fn
     )
     output_dir.mkdir(exist_ok=True, parents=True)
 
     optimizer = Adam(model.parameters(), lr=lr)
-    scheduler = lr_scheduler.StepLR(optimizer, step_size=lr_step_size, gamma=lr_gamma)
+    scheduler = lr_scheduler.StepLR(
+        optimizer, step_size=lr_step_size, gamma=lr_gamma
+    )
 
     print("====== Training ======")
     print(f"# batch: {batch_size}")
@@ -220,7 +238,12 @@ def train(
                 preds = outputs["preds"]
                 if any(
                     isinstance(model, t)
-                    for t in [AutoDeepONet, AutoEDeepONet, AutoFfn, AutoDeepONetCnn]
+                    for t in [
+                        AutoDeepONet,
+                        AutoEDeepONet,
+                        AutoFfn,
+                        AutoDeepONetCnn,
+                    ]
                 ):
                     plot(inputs[0][0], labels[0][0], labels[0][0], out_file)
                 else:
@@ -261,7 +284,9 @@ def train(
         if (ep + 1) % eval_interval == 0:
             ckpt_dir = output_dir / f"ckpt-{ep}"
             ckpt_dir.mkdir(exist_ok=True, parents=True)
-            result = evaluate(model, dev_data, ckpt_dir, batch_size=eval_batch_size)
+            result = evaluate(
+                model, dev_data, ckpt_dir, batch_size=eval_batch_size
+            )
             dev_scores = result["scores"]
             dump_json(dev_scores, ckpt_dir / "dev_scores.json")
             dump_json(ep_train_losses, ckpt_dir / "train_loss.json")
@@ -290,7 +315,9 @@ def train(
 
 def main():
     args = Args().parse_args()
+    print("#" * 80)
     print(args)
+    print("#" * 80)
 
     output_dir = get_output_dir(args, is_auto=True)
     output_dir.mkdir(exist_ok=True, parents=True)
@@ -306,6 +333,9 @@ def main():
         norm_props=bool(args.norm_props),
         norm_bc=bool(args.norm_bc),
     )
+    assert train_data is not None
+    assert dev_data is not None
+    assert test_data is not None
     print(f"# train examples: {len(train_data)}")
     print(f"# dev examples: {len(dev_data)}")
     print(f"# test examples: {len(test_data)}")

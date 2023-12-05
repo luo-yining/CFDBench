@@ -27,8 +27,8 @@ class CfdModel(nn.Module):
         self,
         case_params,
         t: Tensor,
-        height: Tensor,
-        width: Tensor,
+        height: int,
+        width: int,
         **kwargs,
     ) -> Tensor:
         """
@@ -40,10 +40,11 @@ class CfdModel(nn.Module):
 
 class AutoCfdModel(nn.Module):
     """
-    A CFD model that generates the solution auto-regressively, one frame at a time.
+    A CFD model that generates the solution auto-regressively, one frame
+    at a time.
     """
 
-    def __init__(self, loss_fn: MseLoss):
+    def __init__(self, loss_fn: nn.Module):
         super().__init__()
         self.loss_fn = loss_fn
 
@@ -68,7 +69,7 @@ class AutoCfdModel(nn.Module):
 
     def generate_many(
         self,
-        x: Tensor,
+        inputs: Tensor,
         case_params: Tensor,
         mask: Tensor,
         steps: int,

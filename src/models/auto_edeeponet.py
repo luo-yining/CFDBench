@@ -68,7 +68,7 @@ class AutoEDeepONet(AutoCfdModel):
         inputs: Tensor,  # (b, d1), previous field u(t-1)
         case_params: Tensor,  # (b, d2), physical properties
         label: Optional[Tensor] = None,
-        mask: Optional[Tensor] = None,
+        mask: Optional[Tensor] = None,  # NOTE: not used
         query_idxs: Optional[Tensor] = None,
     ) -> Dict[str, Tensor]:
         """
@@ -81,15 +81,10 @@ class AutoEDeepONet(AutoCfdModel):
         - label: (b, w, h), the frame to be predicted.
         - query_idxs: (b, k, 2), the query locations.
         """
-
-        # Add mask to input as additional channels
-        if mask is not None:
-            if mask.dim() == 3:
-                mask = mask.unsqueeze(1)  # (B, 1, h, w)
-            inputs = torch.cat([inputs, mask], dim=1)  # (B, c + 1, h, w)
-
         batch_size, num_chan, height, width = inputs.shape
+        # Only use the u channel, because using more channels is to expensive
         inputs = inputs[:, 0]  # (B, h, w)
+        # Flatten
         flat_inputs = inputs.view(batch_size, -1)  # (B, h * w)
 
         b1 = self.branch1(flat_inputs)  # (b, p)
@@ -117,10 +112,10 @@ class AutoEDeepONet(AutoCfdModel):
         if label is not None:
             # Use only the u channel
             label = label[:, 0]  # (B, w, h)
-            # we have labels[i, j] = label[
-            #     i, query_points[i, j, 0], query_points[i, j, 1]]
             labels = label[:, query_idxs[:, 0], query_idxs[:, 1]]  # (b, k)
-            assert preds.shape == labels.shape, f"{preds.shape}, {labels.shape}"
+            assert (
+                preds.shape == labels.shape
+            ), f"{preds.shape}, {labels.shape}"
             loss = self.loss_fn(preds=preds, labels=labels)  # (b, k)
             return dict(
                 preds=preds,

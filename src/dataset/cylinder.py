@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Tuple, List, Dict, Any
+from typing import Tuple, List, Dict, Any, Optional
 from bisect import bisect_right
 import random
 
@@ -8,14 +8,19 @@ from torch import Tensor
 from tqdm import tqdm
 import numpy as np
 
-from .base import CfdDataset, CfdAutoDataset
-from .utils import load_json, normalize_bc, normalize_physics_props
+if __name__ == "__main__":
+    from base import CfdDataset, CfdAutoDataset
+    from utils import (
+        load_json, normalize_bc, normalize_physics_props)  # type: ignore
+else:
+    from .base import CfdDataset, CfdAutoDataset
+    from .utils import load_json, normalize_bc, normalize_physics_props
 
 
 def load_case_data(case_dir: Path) -> Tuple[np.ndarray, Dict[str, float]]:
     """
-    Load from the file that I have preprocessed, and pad the boundary conditions,
-    turn into a numpy array of features.
+    Load from the file that I have preprocessed, and pad the boundary
+    conditions, turn into a numpy array of features.
 
     The shape of both u and v is (time steps, height, width)
     """
@@ -35,8 +40,8 @@ def load_case_data(case_dir: Path) -> Tuple[np.ndarray, Dict[str, float]]:
     y_min = case_params["y_min"]
     y_max = case_params["y_max"]
     radius = case_params["radius"]
-    case_params['center_x'] = -x_min
-    case_params['center_y'] = -y_min
+    case_params["center_x"] = -x_min
+    case_params["center_y"] = -y_min
     for key in ["x_min", "x_max", "y_min", "y_max"]:
         del case_params[key]
 
@@ -63,11 +68,15 @@ def load_case_data(case_dir: Path) -> Tuple[np.ndarray, Dict[str, float]]:
         constant_values=case_params["vel_in"],
     )
     v = np.pad(v, ((0, 0), (0, 0), (1, 0)), mode="constant", constant_values=0)
-    mask = np.pad(mask, ((0, 0), (0, 0), (1, 0)), mode="constant", constant_values=0)
+    mask = np.pad(
+        mask, ((0, 0), (0, 0), (1, 0)), mode="constant", constant_values=0
+    )
     # # Pad the top and bottom
     u = np.pad(u, ((0, 0), (1, 1), (0, 0)), mode="constant", constant_values=0)
     v = np.pad(v, ((0, 0), (1, 1), (0, 0)), mode="constant", constant_values=0)
-    mask = np.pad(mask, ((0, 0), (1, 1), (0, 0)), mode="constant", constant_values=0)
+    mask = np.pad(
+        mask, ((0, 0), (1, 1), (0, 0)), mode="constant", constant_values=0
+    )
     features = np.stack([u, v, mask], axis=1)  # (T, 3, h, w)
     return features, case_params
 
@@ -76,10 +85,13 @@ class CylinderFlowDataset(CfdDataset):
     """
     Dataset for Cylinder flow problem.
 
-    Varying density and viscosity and inlet velocity for each case (3 variables).
+    Varying density and viscosity and inlet velocity for each case
+    (3 variables).
     """
 
-    data_delta_time = 0.1  # Time difference (s) between two frames in the data.
+    data_delta_time = (
+        0.1  # Time difference (s) between two frames in the data.
+    )
     data_max_time = 30  # Total time (s) in the data.
     case_params_keys = [
         "vel_in",
@@ -107,8 +119,9 @@ class CylinderFlowDataset(CfdDataset):
         - sample_point_by_point: If True, each example is a feature point
             (x, y, t) and the corresponding output function value u(x, y, t).
             If False, each example is an entire frame.
-        - stable_state_diff: The mean relative difference between two consecutive
-            frames that indicates the system has reached a stable state.
+        - stable_state_diff: The mean relative difference between two
+            consecutive frames that indicates the system has reached a
+            stable state.
         """
         self.case_dirs = case_dirs
         self.norm_props = norm_props
@@ -148,14 +161,17 @@ class CylinderFlowDataset(CfdDataset):
                 dtype=torch.float32,
             )
             self.case_params.append(params_tensor)
-            features.append(torch.tensor(this_case_features, dtype=torch.float32))
+            features.append(
+                torch.tensor(this_case_features, dtype=torch.float32)
+            )
             case_ids.append(case_id)
             self.num_frames.append(T)
 
         self.features = features  # N * (T, c, h, w)
         self.case_ids = torch.tensor(case_ids)
 
-        # get the no. frames up until this case (inclusive), used for evaluation.
+        # get the no. frames up until this case (inclusive), used for
+        # evaluation.
         self.num_frames_before: List[int] = [
             sum(self.num_frames[: i + 1]) for i in range(len(self.num_frames))
         ]
@@ -197,10 +213,13 @@ class CylinderFlowAutoDataset(CfdAutoDataset):
     """
     Dataset for Laminar flow problem.
 
-    Varying density and viscosity and inlet velocity for each case (3 variables).
+    Varying density and viscosity and inlet velocity for each case
+    (3 variables).
     """
 
-    data_delta_time = 0.001  # Time difference (s) between two frames in the data.
+    data_delta_time = (
+        0.001  # Time difference (s) between two frames in the data.
+    )
     # data_max_time = 30  # Total time (s) in the data.
 
     def __init__(
@@ -267,11 +286,13 @@ class CylinderFlowAutoDataset(CfdAutoDataset):
         all_inputs: List[Tensor] = []
         all_labels: List[Tensor] = []
         all_case_ids: List[int] = []  # The case ID of each example
-        self.all_features: List[Tensor] = []
+        self.all_features: List[np.ndarray] = []
 
         # Loop cases to create features and labels
         for case_id, case_dir in enumerate(case_dirs):
-            case_features, this_case_params = load_case_data(case_dir)  # (T, c, h, w)
+            case_features, this_case_params = load_case_data(
+                case_dir
+            )  # (T, c, h, w)
             self.all_features.append(case_features)
             inputs = case_features[:-time_step_size, :]  # (T, 3, h, w)
             outputs = case_features[time_step_size:, :]  # (T, 3, h, w)
@@ -296,7 +317,9 @@ class CylinderFlowAutoDataset(CfdAutoDataset):
                 diff = torch.abs(inp_magn - out_magn).mean()
                 # print(f"Mean difference: {diff}")
                 if diff < self.stable_state_diff:
-                    print(f"Converged at {i} out of {num_steps}, {this_case_params}")
+                    print(
+                        f"Converged at {i} / {num_steps}, {this_case_params}"
+                    )
                     break
                 assert not torch.isnan(inp).any()
                 assert not torch.isnan(out).any()
@@ -322,8 +345,11 @@ class CylinderFlowAutoDataset(CfdAutoDataset):
         case_id = self.case_ids[idx]
         case_params = self.case_params[case_id]
         case_params = {
-            k: torch.tensor(v, dtype=torch.float32) for k, v in case_params.items()
+            k: torch.tensor(v, dtype=torch.float32)
+            for k, v in case_params.items()
         }
+        # print(inputs.shape)
+        # print(label.shape)
         return inputs, label, case_params
 
     def __len__(self):
@@ -384,8 +410,12 @@ def get_cylinder_auto_datasets(
     delta_time: float = 0.01,
     stable_state_diff: float = 0.001,
     seed: int = 0,
-    load_splits: List[str] = ['train', 'dev', 'test'],
-) -> Tuple[CylinderFlowAutoDataset, CylinderFlowAutoDataset, CylinderFlowAutoDataset]:
+    load_splits: List[str] = ["train", "dev", "test"],
+) -> Tuple[
+    Optional[CylinderFlowAutoDataset],
+    Optional[CylinderFlowAutoDataset],
+    Optional[CylinderFlowAutoDataset],
+]:
     print(data_dir, subset_name)
     case_dirs = []
     for name in ["prop", "bc", "geo"]:
@@ -420,25 +450,45 @@ def get_cylinder_auto_datasets(
         stable_state_diff=stable_state_diff,
         norm_props=norm_props,
         norm_bc=norm_bc,
-        cache_dir=Path('./dataset/cache/cylinder', subset_name)
+        cache_dir=Path("./dataset/cache/cylinder", subset_name),
     )
-    if 'train' in load_splits:
-        train_data = CylinderFlowAutoDataset(train_case_dirs, split='train', **kwargs)
+    if "train" in load_splits:
+        train_data = CylinderFlowAutoDataset(
+            train_case_dirs, split="train", **kwargs
+        )
     else:
         train_data = None
-    if 'dev' in load_splits:
-        dev_data = CylinderFlowAutoDataset(dev_case_dirs, split='dev', **kwargs)
+    if "dev" in load_splits:
+        dev_data = CylinderFlowAutoDataset(
+            dev_case_dirs, split="dev", **kwargs
+        )
     else:
         dev_data = None
-    if 'test' in load_splits:
-        test_data = CylinderFlowAutoDataset(test_case_dirs, split='test', **kwargs)
+    if "test" in load_splits:
+        test_data = CylinderFlowAutoDataset(
+            test_case_dirs, split="test", **kwargs
+        )
     else:
         test_data = None
     return train_data, dev_data, test_data
 
 
 if __name__ == "__main__":
-    data_dir = Path("../data/poiseuille/case0")
-    time_step_size = 10
-    dataset = CylinderFlowDataset([data_dir], norm_props=True, norm_bc=True)
-    exit()
+    case_dir = Path("../../data/cylinder/prop/case0070")
+    dataset = CylinderFlowDataset([case_dir], norm_props=True, norm_bc=True)
+    inputs, labels, case_params = dataset[1]
+    print("nonautoregressive example")
+    print(inputs.shape, labels.shape)
+    print(case_params)
+
+    dataset = CylinderFlowAutoDataset(
+        [case_dir],
+        norm_props=True,
+        norm_bc=True,
+        cache_dir=Path("./cache/cylinder/test"),
+        split="test",
+    )
+    inputs, labels, case_params = dataset[1]
+    print("autoregressive example")
+    print(inputs.shape, labels.shape)
+    print(case_params)

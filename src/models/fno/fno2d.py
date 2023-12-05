@@ -10,7 +10,6 @@ from .Adam import Adam
 from .utilities3 import MatReader, count_params
 from ..base_model import AutoCfdModel
 
-
 torch.manual_seed(0)
 np.random.seed(0)
 
@@ -25,22 +24,29 @@ class SpectralConv2d_fast(nn.Module):
 
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.modes1 = (
-            modes1  # Number of Fourier modes to multiply, at most floor(N/2) + 1
-        )
+        # Number of Fourier modes to multiply, at most floor(N/2) + 1
+        self.modes1 = modes1
         self.modes2 = modes2
 
         self.scale = 1 / (in_channels * out_channels)
         self.weights1 = nn.Parameter(  # type: ignore
             self.scale
             * torch.rand(
-                in_channels, out_channels, self.modes1, self.modes2, dtype=torch.cfloat
+                in_channels,
+                out_channels,
+                self.modes1,
+                self.modes2,
+                dtype=torch.cfloat,
             )
         )
         self.weights2 = nn.Parameter(  # type: ignore
             self.scale
             * torch.rand(
-                in_channels, out_channels, self.modes1, self.modes2, dtype=torch.cfloat
+                in_channels,
+                out_channels,
+                self.modes1,
+                self.modes2,
+                dtype=torch.cfloat,
             )
         )
 
@@ -126,7 +132,8 @@ class Fno2d(AutoCfdModel):
         1. Lift the input to the desire channel dimension by self.fc0 .
         2. 4 layers of the integral operators u' = (W + K)(u).
             W defined by self.w; K defined by self.conv .
-        3. Project from the channel space to the output space by self.fc1 and self.fc2 .
+        3. Project from the channel space to the output space by self.fc1
+            and self.fc2 .
         """
         self.in_chan = in_chan
         self.out_chan = out_chan
@@ -139,9 +146,16 @@ class Fno2d(AutoCfdModel):
 
         self.act_fn = nn.GELU()
         # Channel projection into `hidden_dim` channels
-        # +7 because of coordinates (+2) and case params (+5)
-        self.fc0 = nn.Conv2d(in_chan + 2 + n_case_params, self.hidden_dim, 1, 1, 0)
-        # input channel is 12: the solution of the previous 10 timesteps + 2 locations
+        # +1 for mask, +2 for coordinates
+        self.fc0 = nn.Conv2d(
+            in_chan + 1 + 2 + n_case_params,
+            self.hidden_dim,
+            1,
+            1,
+            0,
+        )
+        # input channel is 12: the solution of the previous 10
+        # timesteps + 2 locations
         # (u(t-10, x, y), ..., u(t-1, x, y),  x, y)
 
         # FNO blocks
@@ -176,7 +190,15 @@ class Fno2d(AutoCfdModel):
         Returns:
             output: (b, c, h, w), the solution of the next timestep
         """
-        batch_size, _, height, width = inputs.shape
+        batch_size, n_chan, height, width = inputs.shape
+
+        if mask is None:
+            # When there is no mask, we assume that there is no obstacles.
+            mask = torch.ones((batch_size, 1, height, width)).to(inputs.device)
+        else:
+            if mask.dim() == 3:  # (B, h, w)
+                mask = mask.unsqueeze(1)  # (B, 1, h, w)
+        inputs = torch.cat([inputs, mask], dim=1)  # (B, c + 1, h, w)
 
         # 物性
         props = case_params  # (B, p)
@@ -185,7 +207,9 @@ class Fno2d(AutoCfdModel):
 
         # Append (x, y) coordinates to every location
         grid = self.get_coords(inputs.shape, inputs.device)  # (b, 2, h, w)
-        inputs = torch.cat((inputs, grid, props), dim=1)  # (b, c + 2 + 2, h, w)
+        inputs = torch.cat(
+            (inputs, grid, props), dim=1
+        )  # (b, c + 2 + 2, h, w)
 
         # Project channels
         inputs = self.fc0(inputs)  # (b, hidden_dim, h, w)
@@ -202,7 +226,12 @@ class Fno2d(AutoCfdModel):
         inputs = self.fc1(inputs)  # (b, 128, h, w)
         inputs = self.act_fn(inputs)
         preds = self.fc2(inputs)  # (b, c_out, h, w)
+
+        # Masked locations are not prediction
+        preds = preds * mask
+
         if label is not None:
+            label = label * mask
             loss = self.loss_fn(preds=preds, labels=label)
             return dict(
                 preds=preds,
@@ -229,13 +258,6 @@ class Fno2d(AutoCfdModel):
         case_params: Tensor,
         mask: Optional[Tensor] = None,
     ) -> Tensor:
-        """
-        Args:
-            x (Tensor):
-            case_params (dict):
-        Returns:
-            output: (steps, c, h, w)
-        """
         outputs = self.forward(
             inputs=inputs, case_params=case_params, mask=mask
         )  # (b, c, h, w)
@@ -265,7 +287,7 @@ class Fno2d(AutoCfdModel):
         preds = []
         for _ in range(steps):
             cur_frame = self.generate(
-                inputs=cur_frame, case_params=case_params, mask=None
+                inputs=cur_frame, case_params=case_params, mask=mask
             )
             preds.append(cur_frame)
         return preds
@@ -317,20 +339,20 @@ if __name__ == "__main__":
     ################################################################
 
     reader = MatReader(TRAIN_PATH)
-    train_a = reader.read_field("u")[:ntrain, ::sub, ::sub, :T_in]
-    train_u = reader.read_field("u")[:ntrain, ::sub, ::sub, T_in : T + T_in]
+    train_a = reader.read_field("u")[:ntrain, ::sub, ::sub, :T_in]  # type: ignore  # noqa
+    train_u = reader.read_field("u")[:ntrain, ::sub, ::sub, T_in : T + T_in]  # type: ignore # noqa
 
     reader = MatReader(TEST_PATH)
-    test_a = reader.read_field("u")[-ntest:, ::sub, ::sub, :T_in]
-    test_u = reader.read_field("u")[-ntest:, ::sub, ::sub, T_in : T + T_in]
+    test_a = reader.read_field("u")[-ntest:, ::sub, ::sub, :T_in]  # type: ignore  # noqa
+    test_u = reader.read_field("u")[-ntest:, ::sub, ::sub, T_in : T + T_in]  # type: ignore  # noqa
 
-    print(train_u.shape)
-    print(test_u.shape)
-    assert S == train_u.shape[-2]
-    assert T == train_u.shape[-1]
+    print(train_u.shape)  # type: ignore
+    print(test_u.shape)  # type: ignore
+    assert S == train_u.shape[-2]  # type: ignore
+    assert T == train_u.shape[-1]  # type: ignore
 
-    train_a = train_a.reshape(ntrain, S, S, T_in)
-    test_a = test_a.reshape(ntest, S, S, T_in)
+    train_a = train_a.reshape(ntrain, S, S, T_in)  # type: ignore
+    test_a = test_a.reshape(ntest, S, S, T_in)  # type: ignore
 
     train_loader = torch.utils.data.DataLoader(
         torch.utils.data.TensorDataset(train_a, train_u),
@@ -347,11 +369,11 @@ if __name__ == "__main__":
     # training and evaluation
     ################################################################
 
-    model = Fno2d(modes, modes, width).cuda()
+    model = Fno2d(modes, modes, width).cuda()  # type: ignore
     # model = torch.load('model/ns_fourier_V100_N1000_ep100_m8_w20')
 
     print(count_params(model))
-    optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
+    optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)  # type: ignore  # noqa
     scheduler = torch.optim.lr_scheduler.StepLR(
-        optimizer, step_size=scheduler_step, gamma=scheduler_gamma
+        optimizer, step_size=scheduler_step, gamma=scheduler_gamma  # type: ignore  # noqa
     )

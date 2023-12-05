@@ -196,7 +196,9 @@ class LpLoss(object):
         num_examples = x.size()[0]
 
         diff_norms = torch.norm(
-            x.reshape(num_examples, -1) - y.reshape(num_examples, -1), self.p, 1
+            x.reshape(num_examples, -1) - y.reshape(num_examples, -1),
+            self.p,
+            1,
         )
         y_norms = torch.norm(y.reshape(num_examples, -1), self.p, 1)
 
@@ -216,7 +218,14 @@ class LpLoss(object):
 # where we also compare the numerical derivatives between the output and target
 class HsLoss(object):
     def __init__(
-        self, d=2, p=2, k=1, a=None, group=False, size_average=True, reduction=True
+        self,
+        d=2,
+        p=2,
+        k=1,
+        a=None,
+        group=False,
+        size_average=True,
+        reduction=True,
     ):
         super(HsLoss, self).__init__()
 
@@ -239,7 +248,9 @@ class HsLoss(object):
     def rel(self, x, y):
         num_examples = x.size()[0]
         diff_norms = torch.norm(
-            x.reshape(num_examples, -1) - y.reshape(num_examples, -1), self.p, 1
+            x.reshape(num_examples, -1) - y.reshape(num_examples, -1),
+            self.p,
+            1,
         )
         y_norms = torch.norm(y.reshape(num_examples, -1), self.p, 1)
         if self.reduction:
@@ -291,7 +302,9 @@ class HsLoss(object):
             if k >= 1:
                 weight += a[0] ** 2 * (k_x**2 + k_y**2)
             if k >= 2:
-                weight += a[1] ** 2 * (k_x**4 + 2 * k_x**2 * k_y**2 + k_y**4)
+                weight += a[1] ** 2 * (
+                    k_x**4 + 2 * k_x**2 * k_y**2 + k_y**4
+                )
             weight = torch.sqrt(weight)
             loss = self.rel(x * weight, y * weight)
         else:
@@ -311,7 +324,9 @@ class HsLoss(object):
 
 # A simple feedforward neural network
 class DenseNet(torch.nn.Module):
-    def __init__(self, layers, nonlinearity, out_nonlinearity=None, normalize=False):
+    def __init__(
+        self, layers, nonlinearity, out_nonlinearity=None, normalize=False
+    ):
         super(DenseNet, self).__init__()
 
         self.n_layers = len(layers) - 1
@@ -343,5 +358,7 @@ class DenseNet(torch.nn.Module):
 def count_params(model):
     c = 0
     for p in list(model.parameters()):
-        c += reduce(operator.mul, list(p.size() + (2,) if p.is_complex() else p.size()))
+        c += reduce(
+            operator.mul, list(p.size() + (2,) if p.is_complex() else p.size())
+        )
     return c

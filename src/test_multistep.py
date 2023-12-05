@@ -40,7 +40,9 @@ def init_model(args: Args) -> CfdModel:
         ).cuda()
     elif args.model == "ffn":
         widths = (
-            [n_case_params + query_coord_dim] + [args.ffn_width] * args.ffn_depth + [1]
+            [n_case_params + query_coord_dim]
+            + [args.ffn_width] * args.ffn_depth
+            + [1]
         )
         model = FfnModel(
             widths=widths,
@@ -54,7 +56,7 @@ def init_model(args: Args) -> CfdModel:
 
 
 def plot_metrics(metrics: List[dict], out_path: Optional[Path] = None):
-    metrics = np.array(metrics)
+    metrics = np.array(metrics)  # type: ignore
     for key in ["nmse", "mse", "mae"]:
         values = [x[key] for x in metrics]
         plt.plot(values, label=key.upper())
@@ -80,10 +82,12 @@ def get_metrics(preds: Tensor, labels: Tensor):
     )
 
 
-def case_params_to_tensor(case_params: dict):
+def case_params_to_tensor(case_params_dict: dict):
     # Case params is a dict, turn it into a tensor
-    keys = [x for x in case_params.keys() if x not in ["rotated", "dx", "dy"]]
-    case_params_vec = [case_params[k] for k in keys]
+    keys = [
+        x for x in case_params_dict.keys() if x not in ["rotated", "dx", "dy"]
+    ]
+    case_params_vec = [case_params_dict[k] for k in keys]
     case_params = torch.tensor(case_params_vec)  # (b, 5)
     return case_params
 
@@ -129,7 +133,10 @@ def infer_case(
 
 
 def infer(
-    model, all_features: List[Tensor], all_case_params: List[Tensor], infer_steps: int
+    model,
+    all_features: List[Tensor],
+    all_case_params: List[Tensor],
+    infer_steps: int,
 ):
     n_cases = len(all_features)
     print(f"Number of cases: {n_cases}")
@@ -184,6 +191,9 @@ def main():
         norm_bc=bool(args.norm_bc),
         load_splits=["test"],
     )
+    assert test_data is not None
+    assert test_data.all_features is not None
+    assert test_data.case_params is not None
     print("Test data size:", len(test_data))
     infer_steps = 20
     all_features = test_data.all_features
@@ -195,13 +205,17 @@ def main():
     for case_id, case_features in enumerate(all_features):
         num_frames = case_features.shape[0]
         while num_frames < infer_steps:
-            case_features = np.concatenate([case_features, case_features[-1:]], axis=0)
+            case_features = np.concatenate(
+                [case_features, case_features[-1:]], axis=0
+            )
             num_frames += 1
         all_features[case_id] = FloatTensor(case_features).to("cuda")
 
     # Turn case params into tensors
     for case_id, case_params in enumerate(all_case_params):
-        all_case_params[case_id] = case_params_to_tensor(case_params).to("cuda")
+        all_case_params[case_id] = case_params_to_tensor(case_params).to(
+            "cuda"
+        )
 
     # print("Number of cases:", len(all_features))
     # exit()

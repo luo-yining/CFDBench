@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 from typing import Union, Optional
+import typing
 
 import torch
 from torch import Tensor
@@ -30,17 +31,18 @@ def load_json(path):
         return json.load(f)
 
 
+@typing.no_type_check
 def plot_predictions(
     label: Tensor,
     pred: Tensor,
     out_dir: Path,
     step: int,
-    inp: Optional[Tensor] = None,  # non-autoregressive input func. is not plottable.
+    inp: Optional[
+        Tensor
+    ] = None,  # non-autoregressive input func. is not plottable.
 ):
     assert all([isinstance(x, Tensor) for x in [label, pred]])
-    assert (
-        label.shape == pred.shape
-    ), f"{label.shape}, {pred.shape}"
+    assert label.shape == pred.shape, f"{label.shape}, {pred.shape}"
 
     if inp is not None:
         assert inp.shape == label.shape
@@ -58,26 +60,36 @@ def plot_predictions(
 
     # Plot and save images
     if inp is not None:
-        u_min = min(inp_arr.min(), pred_arr.min(), label_arr.min())
-        u_max = max(inp_arr.max(), pred_arr.max(), label_arr.max())
+        u_min = min(inp_arr.min(), pred_arr.min(), label_arr.min())  # type: ignore  # noqa
+        u_max = max(inp_arr.max(), pred_arr.max(), label_arr.max())  # type: ignore  # noqa
     else:
-        u_min = min(pred_arr.min(), label_arr.min())
-        u_max = max(pred_arr.max(), label_arr.max())
+        u_min = min(pred_arr.min(), label_arr.min())  # type: ignore  # noqa
+        u_max = max(pred_arr.max(), label_arr.max())  # type: ignore  # noqa
 
     if inp is not None:
-        plt.axis('off')
-        plt.imshow(inp_arr, vmin=inp_arr.min(), vmax=inp_arr.max(), cmap="coolwarm")
-        plt.savefig(inp_dir / f"{step:04}.png", bbox_inches='tight', pad_inches=0)
+        plt.axis("off")
+        plt.imshow(
+            inp_arr, vmin=inp_arr.min(), vmax=inp_arr.max(), cmap="coolwarm"  # type: ignore  # noqa
+        )
+        plt.savefig(
+            inp_dir / f"{step:04}.png", bbox_inches="tight", pad_inches=0  # type: ignore  # noqa
+        )
         plt.clf()
 
-    plt.axis('off')
-    plt.imshow(label_arr, vmin=label_arr.min(), vmax=label_arr.max(), cmap="coolwarm")
-    plt.savefig(label_dir / f"{step:04}.png", bbox_inches='tight', pad_inches=0)
+    plt.axis("off")
+    plt.imshow(
+        label_arr, vmin=label_arr.min(), vmax=label_arr.max(), cmap="coolwarm"
+    )
+    plt.savefig(
+        label_dir / f"{step:04}.png", bbox_inches="tight", pad_inches=0
+    )
     plt.clf()
 
-    plt.axis('off')
-    plt.imshow(pred_arr, vmin=pred_arr.min(), vmax=pred_arr.max(), cmap="coolwarm")
-    plt.savefig(pred_dir / f"{step:04}.png", bbox_inches='tight', pad_inches=0)
+    plt.axis("off")
+    plt.imshow(
+        pred_arr, vmin=pred_arr.min(), vmax=pred_arr.max(), cmap="coolwarm"
+    )
+    plt.savefig(pred_dir / f"{step:04}.png", bbox_inches="tight", pad_inches=0)
     plt.clf()
 
 
@@ -97,7 +109,8 @@ def plot(inp: Tensor, label: Tensor, pred: Tensor, out_path: Path):
     plt.subplots_adjust(
         left=0.0, right=1, bottom=0.0, top=1, wspace=0, hspace=0
     )
-    # cbar_ax = fig.add_axes([0.92, 0.15, 0.01, 0.7])  # [left, bottom, width, height]
+    # [left, bottom, width, height]
+    # cbar_ax = fig.add_axes([0.92, 0.15, 0.01, 0.7])  
 
     axs = axs.flatten()
 
@@ -167,7 +180,6 @@ def load_ckpt(model, ckpt_path: Path) -> None:
 
 
 def get_output_dir(args: Args, is_auto: bool = False) -> Path:
-    print(args.output_dir)
     output_dir = Path(
         args.output_dir,
         "auto" if is_auto else "non-auto",
@@ -190,7 +202,9 @@ def get_output_dir(args: Args, is_auto: bool = False) -> Path:
         return output_dir
     elif args.model == "unet":
         dir_name = (
-            f"lr{args.lr}" f"_d{args.unet_dim}" f"_cp{args.unet_insert_case_params_at}"
+            f"lr{args.lr}"
+            f"_d{args.unet_dim}"
+            f"_cp{args.unet_insert_case_params_at}"
         )
         output_dir /= dir_name
         return output_dir
@@ -206,7 +220,9 @@ def get_output_dir(args: Args, is_auto: bool = False) -> Path:
         return output_dir
     elif args.model == "resnet":
         dir_name = (
-            f"lr{args.lr}" f"_d{args.resnet_depth}" f"_w{args.resnet_hidden_chan}"
+            f"lr{args.lr}"
+            f"_d{args.resnet_depth}"
+            f"_w{args.resnet_hidden_chan}"
         )
         return output_dir / dir_name
     elif args.model == "auto_edeeponet":
@@ -233,14 +249,18 @@ def get_output_dir(args: Args, is_auto: bool = False) -> Path:
         return output_dir / dir_name
     elif args.model == "auto_ffn":
         dir_name = (
-            f"lr{args.lr}" f"_width{args.autoffn_width}" f"_depth{args.autoffn_depth}"
+            f"lr{args.lr}"
+            f"_width{args.autoffn_width}"
+            f"_depth{args.autoffn_depth}"
         )
         return output_dir / dir_name
     elif args.model == "auto_deeponet_cnn":
         dir_name = f"lr{args.lr}" f"_depth{args.autoffn_depth}"
         return output_dir / dir_name
     elif args.model == "ffn":
-        dir_name = f"lr{args.lr}" f"_width{args.ffn_width}" f"_depth{args.ffn_depth}"
+        dir_name = (
+            f"lr{args.lr}" f"_width{args.ffn_width}" f"_depth{args.ffn_depth}"
+        )
         return output_dir / dir_name
     else:
         raise NotImplementedError

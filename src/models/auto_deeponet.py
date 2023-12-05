@@ -85,15 +85,15 @@ class AutoDeepONet(AutoCfdModel):
         Here, we just randomly sample some points, and use the label values on
         those points as the label.
 
-        Args:
-            inputs: (b, c, h, w)
-            case_params: (b, p)
-            labels: (b, c, h, w)
-            query_point: (k, 2), k is the number of query points, each is an (x, y)
-                coordinate.
-            masks: For future use.
+        ### Args
+        - inputs: (b, c, h, w)
+        - case_params: (b, p)
+        - labels: (b, c, h, w)
+        - query_point: (k, 2), k is the number of query points, each is
+            an (x, y) coordinate.
+        - masks: For future use.
 
-        Returns:
+        ### Returns
             Output: Tensor, if query_points is not None, the shape is (b, k).
                 Else, the shape is (b, c, h, w).
 
@@ -105,21 +105,15 @@ class AutoDeepONet(AutoCfdModel):
         - p: number of case parameters
         - k: number of query points
         """
-
-        # Add mask to input as additional channels
-        if mask is not None:
-            if mask.dim() == 3:
-                mask = mask.unsqueeze(1)  # (B, 1, h, w)
-            inputs = torch.cat([inputs, mask], dim=1)  # (B, c + 1, h, w)
-
         batch_size, num_chan, height, width = inputs.shape
-
         # Only use the u channel
         inputs = inputs[:, 0]  # (B, h, w)
+        # Flatten
         flat_inputs = inputs.view(batch_size, -1)  # (B, h * w)
 
         # Simple prepend physical properties to the input field.
-        flat_inputs = torch.cat([flat_inputs, case_params], dim=1)  # (B, h * w + 2)
+        # (B, h * w + 2)
+        flat_inputs = torch.cat([flat_inputs, case_params], dim=1)
         x_branch = self.branch_net(flat_inputs)
 
         if query_idxs is None:
@@ -152,7 +146,9 @@ class AutoDeepONet(AutoCfdModel):
         preds = preds.view(-1, 1, height, width)  # (b, 1, h, w)
         return dict(preds=preds)
 
-    def generate(self, inputs: Tensor, case_params: Tensor, mask: Tensor) -> Tensor:
+    def generate(
+        self, inputs: Tensor, case_params: Tensor, mask: Tensor
+    ) -> Tensor:
         """
         x: (c, h, w) or (B, c, h, w)
 
@@ -191,14 +187,14 @@ class AutoDeepONet(AutoCfdModel):
         if inputs.dim() == 3:
             inputs = inputs.unsqueeze(0)  # (1, c, h, w)
             case_params = case_params.unsqueeze(0)  # (1, p)
-            mask = mask.unsqueeze(0)    # (1, h, w)
+            mask = mask.unsqueeze(0)  # (1, h, w)
         assert inputs.shape[0] == case_params.shape[0]
         cur_frame = inputs
         preds = []
         for _ in range(steps):
             # (b, c, h, w)
             cur_frame = self.generate(
-                inputs=cur_frame, case_params=case_params, mask=None
+                inputs=cur_frame, case_params=case_params, mask=mask
             )
             preds.append(cur_frame)
         return preds

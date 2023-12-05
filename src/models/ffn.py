@@ -13,7 +13,10 @@ class Ffn(nn.Module):
     """
     A general fully connected multi-layer neural network.
     """
-    def __init__(self, dims: list, act_fn: nn.Module, act_on_output: bool = False):
+
+    def __init__(
+        self, dims: list, act_fn: nn.Module, act_on_output: bool = False
+    ):
         super().__init__()
         self.dims = dims
 
@@ -63,7 +66,9 @@ class FfnModel(CfdModel):
         self.num_label_samples = num_label_samples
 
         act_fn = get_act_fn(act_name, act_norm)
-        self.ffn = Ffn(self.widths, act_fn=act_fn, act_on_output=self.act_on_output)
+        self.ffn = Ffn(
+            self.widths, act_fn=act_fn, act_on_output=self.act_on_output
+        )
 
     def forward(
         self,
@@ -93,10 +98,16 @@ class FfnModel(CfdModel):
             query_idxs = torch.stack(
                 [
                     torch.randint(
-                        0, height, (self.num_label_samples,), device=label.device
+                        0,
+                        height,
+                        (self.num_label_samples,),
+                        device=label.device,
                     ),
                     torch.randint(
-                        0, width, (self.num_label_samples,), device=label.device
+                        0,
+                        width,
+                        (self.num_label_samples,),
+                        device=label.device,
                     ),
                 ],
                 dim=-1,
@@ -122,7 +133,9 @@ class FfnModel(CfdModel):
             # Use only the u channel
             label = label[:, 0]  # (B, w, h)
             labels = label[:, query_idxs[:, 0], query_idxs[:, 1]]  # (b, k)
-            assert preds.shape == labels.shape, f"{preds.shape}, {labels.shape}"
+            assert (
+                preds.shape == labels.shape
+            ), f"{preds.shape}, {labels.shape}"
             loss = self.loss_fn(preds=preds, labels=labels)  # (b, k)
             return dict(
                 preds=preds,

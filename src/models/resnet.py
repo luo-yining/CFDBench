@@ -57,7 +57,12 @@ class ResidualBlock(nn.Module):
 
         if use_1x1conv:
             self.res_conv = nn.Conv2d(
-                in_chan, out_chan, kernel_size=1, stride=stride, padding=0, bias=bias
+                in_chan,
+                out_chan,
+                kernel_size=1,
+                stride=stride,
+                padding=0,
+                bias=bias,
             )
         else:
             self.res_conv = None
@@ -102,7 +107,7 @@ class ResNet(AutoCfdModel):
         # Create sequence of residual blocks
         blocks = [
             ResidualBlock(
-                in_chan + 1 + n_case_params,  # +3 for case params
+                in_chan + 1 + n_case_params,  # + 1 for mask
                 hidden_chan,
                 64,
                 kernel_size,
@@ -154,23 +159,36 @@ class ResNet(AutoCfdModel):
         Returns:
             (B, out_chan, h, w) or (B, out_chan, h, w), loss
         """
-        residual = inputs[:, :self.out_chan]
-        if mask is not None:
-            if mask.dim() == 2:
-                mask = mask.unsqueeze(0).unsqueeze(1)  # (1, 1, h, w) 2:
+        residual = inputs[:, : self.out_chan]
+        batch_size, n_chan, height, width = inputs.shape
+        if mask is None:
+            mask = torch.ones((batch_size, height, width)).to(inputs.device)
+        else:
             if mask.dim() == 3:
-                mask = mask.unsqueeze(1)  # (b, 1, h, w)
-            inputs = torch.cat([inputs, mask], dim=1)  # (B, c + 1, h, w)
+                mask = mask.unsqueeze(1)  # (B, 1, h, w)
+        inputs = torch.cat([inputs, mask], dim=1)  # (B, c + 1, h, w)
 
         # Add case params as additional channels
         case_params = case_params.unsqueeze(-1).unsqueeze(-1)  # (B, c, 1, 1)
         # (B, n_params, h, w)
-        case_params = case_params.expand(-1, -1, inputs.shape[-2], inputs.shape[-1])
-        inputs = torch.cat([inputs, case_params], dim=1)  # (B, c + n_params, h, w)
+        case_params = case_params.expand(
+            -1, -1, inputs.shape[-2], inputs.shape[-1]
+        )
+        inputs = torch.cat(
+            [inputs, case_params], dim=1
+        )  # (B, c + n_params, h, w)
 
         inputs = self.blocks(inputs)  # (B, c, h, w)
         preds = inputs + residual
+
+        if mask is not None:
+            # Mask out predictions.
+            preds = preds * mask
+
         if label is not None:
+            if mask is not None:
+                # Mask out labels
+                label = label * mask
             loss = self.loss_fn(preds=preds, labels=label)
             return dict(
                 preds=preds,
@@ -185,18 +203,16 @@ class ResNet(AutoCfdModel):
         case_params: Tensor,
         mask: Optional[Tensor] = None,
     ):
-        """
-        Args:
-        - mask: 1 for interior
-        """
         outputs = self.forward(inputs, case_params=case_params, mask=mask)
         preds = outputs["preds"]
-        # if mask is not None:
-            # return preds * mask + (1 - mask) * inputs
         return preds
 
     def generate_many(
-        self, inputs: Tensor, case_params: Tensor, steps: int, mask: Optional[Tensor] = None
+        self,
+        inputs: Tensor,
+        case_params: Tensor,
+        steps: int,
+        mask: Tensor,
     ):
         """
         x: (c, h, w)
@@ -211,8 +227,10 @@ class ResNet(AutoCfdModel):
             mask = mask.unsqueeze(0)  # (1, h, w)
         cur_frame = inputs  # (1, c, h, w)
         frames = [cur_frame]
-        boundaries = (1 - mask) * cur_frame  # (1, c, h, w)
+        # boundaries = (1 - mask) * cur_frame  # (1, c, h, w)
         for _ in range(steps):
-            cur_frame = self.generate(cur_frame, case_params=case_params, mask=mask)
+            cur_frame = self.generate(
+                cur_frame, case_params=case_params, mask=mask
+            )
             frames.append(cur_frame)
         return frames

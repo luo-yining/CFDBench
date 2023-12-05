@@ -13,7 +13,9 @@ def normalize_physics_props(case_params: Dict[str, float]):
     density_std = 4
     viscosity_mean = 0.00238
     viscosity_std = 0.005
-    case_params["density"] = (case_params["density"] - density_mean) / density_std
+    case_params["density"] = (
+        case_params["density"] - density_mean
+    ) / density_std
     case_params["viscosity"] = (
         case_params["viscosity"] - viscosity_mean
     ) / viscosity_std
@@ -36,20 +38,21 @@ def plot_contour(points):
 
 
 def dump_json(data, path):
-    with open(path, "w", encoding='utf8') as f:
+    with open(path, "w", encoding="utf8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
 def load_json(path):
     """Load a JSON object from a file"""
-    with open(path, 'r', encoding='utf8') as f:
+    with open(path, "r", encoding="utf8") as f:
         return json.load(f)
 
 
 def plot(inputs, outputs, labels, output_file: Path):
     # Create a figure with 6 subplots
     fig, axs = plt.subplots(nrows=2, ncols=3, figsize=(10, 5))
-    # cbar_ax = fig.add_axes([0.92, 0.15, 0.01, 0.7])  # [left, bottom, width, height]
+    # cbar_ax = fig.add_axes([0.92, 0.15, 0.01, 0.7])  # [left, bottom,
+    # width, height]
 
     axs = axs.flatten()
 

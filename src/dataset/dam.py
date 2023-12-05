@@ -37,14 +37,18 @@ from torch import Tensor
 import numpy as np
 from tqdm import tqdm
 
-from .base import CfdDataset, CfdAutoDataset
-from .utils import load_json, normalize_bc, normalize_physics_props
+if __name__ == "__main__":
+    from base import CfdDataset, CfdAutoDataset
+    from utils import load_json, normalize_bc, normalize_physics_props  # type: ignore  # noqa
+else:
+    from .base import CfdDataset, CfdAutoDataset
+    from .utils import load_json, normalize_bc, normalize_physics_props
 
 
 def load_case_data(case_dir: Path) -> Tuple[np.ndarray, Dict[str, float]]:
     """
-    Load from the file that I have preprocessed, and pad the boundary conditions,
-    turn into a numpy array of features.
+    Load from the file that I have preprocessed, and pad the boundary
+    conditions, turn into a numpy array of features.
 
     The shape of both u and v is (time steps, height, width)
     """
@@ -72,7 +76,9 @@ def load_case_data(case_dir: Path) -> Tuple[np.ndarray, Dict[str, float]]:
     barrier_right_idx = int(barrier_right / case_params["dx"])
     barrier_bottom_idx = int(barrier_bottom / case_params["dy"])
     barrier_top_idx = int(barrier_top / case_params["dy"])
-    mask[:barrier_bottom_idx:barrier_top_idx, barrier_left_idx:barrier_right_idx] = 0
+    mask[
+        :barrier_bottom_idx:barrier_top_idx, barrier_left_idx:barrier_right_idx
+    ] = 0
 
     # Pad the left side with the BC
     u = np.pad(
@@ -83,12 +89,16 @@ def load_case_data(case_dir: Path) -> Tuple[np.ndarray, Dict[str, float]]:
     )
     u[:, :barrier_top_idx, :1] = case_params["velocity"]
     v = np.pad(v, ((0, 0), (0, 0), (1, 0)), mode="constant", constant_values=0)
-    mask = np.pad(mask, ((0, 0), (0, 0), (1, 0)), mode="constant", constant_values=0)
+    mask = np.pad(
+        mask, ((0, 0), (0, 0), (1, 0)), mode="constant", constant_values=0
+    )
 
     # Pad the top and bottom, which is just 0
     u = np.pad(u, ((0, 0), (1, 1), (0, 0)), mode="constant", constant_values=0)
     v = np.pad(v, ((0, 0), (1, 1), (0, 0)), mode="constant", constant_values=0)
-    mask = np.pad(mask, ((0, 0), (1, 1), (0, 0)), mode="constant", constant_values=0)
+    mask = np.pad(
+        mask, ((0, 0), (1, 1), (0, 0)), mode="constant", constant_values=0
+    )
     features = np.stack([u, v, mask], axis=1)  # (T, 3, h, w)
 
     # Get wanted case params
@@ -101,10 +111,13 @@ class DamFlowDataset(CfdDataset):
     """
     Dataset for Dam flow problem.
 
-    Varying density and viscosity and inlet velocity for each case (3 variables).
+    Varying density and viscosity and inlet velocity for each case
+    (3 variables).
     """
 
-    data_delta_time = 0.1  # Time difference (s) between two frames in the data.
+    data_delta_time = (
+        0.1  # Time difference (s) between two frames in the data.
+    )
     case_params_keys = ["velocity", "density", "viscosity", "height", "width"]
 
     def __init__(
@@ -122,8 +135,9 @@ class DamFlowDataset(CfdDataset):
         - sample_point_by_point: If True, each example is a feature point
             (x, y, t) and the corresponding output function value u(x, y, t).
             If False, each example is an entire frame.
-        - stable_state_diff: The mean relative difference between two consecutive
-            frames that indicates the system has reached a stable state.
+        - stable_state_diff: The mean relative difference between two
+            consecutive frames that indicates the system has reached
+            a stable state.
         """
         self.case_dirs = case_dirs
         self.norm_props = norm_props
@@ -166,14 +180,17 @@ class DamFlowDataset(CfdDataset):
                 dtype=torch.float32,
             )
             self.case_params.append(params_tensor)
-            features.append(torch.tensor(this_case_features, dtype=torch.float32))
+            features.append(
+                torch.tensor(this_case_features, dtype=torch.float32)
+            )
             case_ids.append(case_id)
             self.num_frames.append(T)
 
         self.features = features  # N * (T, c, h, w)
         self.case_ids = torch.tensor(case_ids)
 
-        # get the no. frames up until this case (inclusive), used for evaluation.
+        # get the no. frames up until this case (inclusive), used
+        # for evaluation.
         self.num_frames_before: List[int] = [
             sum(self.num_frames[: i + 1]) for i in range(len(self.num_frames))
         ]
@@ -214,10 +231,13 @@ class DamFlowAutoDataset(CfdAutoDataset):
     """
     Dataset for Dam flow problem.
 
-    Varying density and viscosity and inlet velocity for each case (3 variables).
+    Varying density and viscosity and inlet velocity for each case
+    (3 variables).
     """
 
-    data_delta_time = 0.1  # Time difference (s) between two frames in the data.
+    data_delta_time = (
+        0.1  # Time difference (s) between two frames in the data.
+    )
 
     def __init__(
         self,
@@ -258,10 +278,12 @@ class DamFlowAutoDataset(CfdAutoDataset):
         all_inputs: List[Tensor] = []
         all_labels: List[Tensor] = []
         all_case_ids: List[int] = []
-        self.all_features: List[Tensor] = []
+        self.all_features: List[np.ndarray] = []
 
         for case_id, case_dir in enumerate(case_dirs):
-            case_features, this_case_params = load_case_data(case_dir)  # (T, c, h, w)
+            case_features, this_case_params = load_case_data(
+                case_dir
+            )  # (T, c, h, w)
             self.all_features.append(case_features)
             inputs = case_features[:-time_step_size, :]  # (T, 3, h, w)
             outputs = case_features[time_step_size:, :]  # (T, 3, h, w)
@@ -295,7 +317,8 @@ class DamFlowAutoDataset(CfdAutoDataset):
         case_id = self.case_ids[idx]
         case_params = self.case_params[case_id]
         case_params = {
-            k: torch.tensor(v, dtype=torch.float32) for k, v in case_params.items()
+            k: torch.tensor(v, dtype=torch.float32)
+            for k, v in case_params.items()
         }
         return inputs, label, case_params
 
@@ -331,9 +354,15 @@ def get_dam_datasets(
     train_case_dirs = case_dirs[:num_train]
     dev_case_dirs = case_dirs[num_train : num_train + num_dev]
     test_case_dirs = case_dirs[num_train + num_dev :]
-    train_data = DamFlowDataset(train_case_dirs, norm_props=norm_props, norm_bc=norm_bc)
-    dev_data = DamFlowDataset(dev_case_dirs, norm_props=norm_props, norm_bc=norm_bc)
-    test_data = DamFlowDataset(test_case_dirs, norm_props=norm_props, norm_bc=norm_bc)
+    train_data = DamFlowDataset(
+        train_case_dirs, norm_props=norm_props, norm_bc=norm_bc
+    )
+    dev_data = DamFlowDataset(
+        dev_case_dirs, norm_props=norm_props, norm_bc=norm_bc
+    )
+    test_data = DamFlowDataset(
+        test_case_dirs, norm_props=norm_props, norm_bc=norm_bc
+    )
     return train_data, dev_data, test_data
 
 
@@ -387,6 +416,15 @@ def get_dam_auto_datasets(
 
 
 if __name__ == "__main__":
-    data_dir = Path("../data/dam/prop")
-    dataset = DamFlowDataset([data_dir], norm_props=True, norm_bc=True)
-    print(dataset[1])
+    case_dir = Path("../../data/dam/prop/case0070")
+    dataset = DamFlowDataset([case_dir], norm_props=True, norm_bc=True)
+    inputs, labels, case_params = dataset[1]
+    print("nonautoregressive example")
+    print(inputs.shape, labels.shape)
+    print(case_params)
+
+    dataset = DamFlowAutoDataset([case_dir], norm_props=True, norm_bc=True)
+    inputs, labels, case_params = dataset[1]
+    print("autoregressive example")
+    print(inputs.shape, labels.shape)
+    print(case_params)

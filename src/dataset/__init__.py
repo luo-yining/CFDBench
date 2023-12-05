@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, Optional
 
 from .base import CfdDataset, CfdAutoDataset
 from .tube import get_tube_datasets, get_tube_auto_datasets
@@ -48,7 +48,7 @@ def get_dataset(
             norm_bc=norm_bc,
         )
         return train_data, dev_data, test_data
-    elif problem_name == 'cylinder':
+    elif problem_name == "cylinder":
         train_data, dev_data, test_data = get_cylinder_datasets(
             data_dir / problem_name,
             case_name=subset_name,
@@ -66,8 +66,12 @@ def get_auto_dataset(
     delta_time: float,
     norm_props: bool,
     norm_bc: bool,
-    load_splits: list = ['train', 'dev', 'test'],
-) -> Tuple[CfdAutoDataset, CfdAutoDataset, CfdAutoDataset]:
+    load_splits: list = ["train", "dev", "test"],
+) -> Tuple[
+    Optional[CfdAutoDataset],
+    Optional[CfdAutoDataset],
+    Optional[CfdAutoDataset],
+]:
     """
     Args:
         data_name: One of: "cavity", "tube", "dam", "cylinder"
@@ -105,7 +109,7 @@ def get_auto_dataset(
             delta_time=delta_time,
         )
         return train_data, dev_data, test_data
-    elif problem_name == 'cylinder':
+    elif problem_name == "cylinder":
         train_data, dev_data, test_data = get_cylinder_auto_datasets(
             data_dir / problem_name,
             subset_name=subset_name,
@@ -116,4 +120,4 @@ def get_auto_dataset(
         )
         return train_data, dev_data, test_data
     else:
-        raise ValueError(f"Invalid data name \"{data_name}\"")
+        raise ValueError(f'Invalid data name "{data_name}"')

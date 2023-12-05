@@ -35,6 +35,9 @@ def get_input_shapes(args: Args) -> Tuple[int, int, int]:
 
 
 def init_model(args: Args) -> AutoCfdModel:
+    """
+    All instances of autoregressive models goes through this.
+    """
     loss_fn = loss_name_to_fn(args.loss_name)
     n_rows, n_cols, n_case_params = get_input_shapes(args)
 
@@ -74,7 +77,7 @@ def init_model(args: Args) -> AutoCfdModel:
         return model
     elif args.model == "auto_deeponet_cnn":
         model = AutoDeepONetCnn(
-            in_chan=args.in_chan + 1,  # mask is not included
+            in_chan=args.in_chan,
             height=n_rows,
             width=n_cols,
             num_case_params=n_case_params,
@@ -84,7 +87,7 @@ def init_model(args: Args) -> AutoCfdModel:
         return model
     elif args.model == "resnet":
         model = ResNet(
-            in_chan=args.in_chan,  # mask is not included
+            in_chan=args.in_chan,
             out_chan=args.out_chan,
             loss_fn=loss_fn,
             n_case_params=n_case_params,
@@ -96,7 +99,7 @@ def init_model(args: Args) -> AutoCfdModel:
         return model
     elif args.model == "unet":
         model = UNet(
-            in_chan=args.in_chan,  # Mask is not included
+            in_chan=args.in_chan,
             out_chan=args.out_chan,
             loss_fn=loss_fn,
             n_case_params=n_case_params,
@@ -106,12 +109,12 @@ def init_model(args: Args) -> AutoCfdModel:
         return model
     elif args.model == "fno":
         model = Fno2d(
-            in_chan=args.in_chan,  # 2 for u and v
+            in_chan=args.in_chan,
             out_chan=args.out_chan,
             n_case_params=n_case_params,
             loss_fn=loss_fn,
             num_layers=args.fno_depth,
-            hidden_dim=args.fno_hidden_dim,  # Hidden dim. in the temporal domain
+            hidden_dim=args.fno_hidden_dim,  # Hid. dim. in the temporal domain
             modes1=args.fno_modes_x,
             modes2=args.fno_modes_y,
         ).cuda()

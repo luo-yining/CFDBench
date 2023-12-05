@@ -121,9 +121,9 @@ def test(
     batch_size: int = 1,
     measure_time: bool = False,
 ):
-    '''
+    """
     Perform inference on the test set.
-    '''
+    """
     assert plot_interval > 0
     output_dir.mkdir(exist_ok=True, parents=True)
     print("==== Testing ====")
@@ -164,7 +164,9 @@ def train(
     output_dir.mkdir(exist_ok=True, parents=True)
 
     optimizer = Adam(model.parameters(), lr=lr)
-    scheduler = lr_scheduler.StepLR(optimizer, step_size=lr_step_size, gamma=lr_gamma)
+    scheduler = lr_scheduler.StepLR(
+        optimizer, step_size=lr_step_size, gamma=lr_gamma
+    )
 
     print("==== Training ====")
     print(f"Output dir: {output_dir}")
@@ -249,7 +251,10 @@ def train(
     plot_loss(all_train_losses, output_dir / "train_losses.png")
 
 
-def init_model(args: Args):
+def init_model(args: Args) -> CfdModel:
+    """
+    Instantiate a nonautoregressive model.
+    """
     print(f"Initting {args.model}")
     loss_fn = loss_name_to_fn(args.loss_name)
     query_coord_dim = 3  # (t, x, y)
@@ -272,7 +277,9 @@ def init_model(args: Args):
         ).cuda()
     elif args.model == "ffn":
         widths = (
-            [n_case_params + query_coord_dim] + [args.ffn_width] * args.ffn_depth + [1]
+            [n_case_params + query_coord_dim]
+            + [args.ffn_width] * args.ffn_depth
+            + [1]
         )
         model = FfnModel(
             widths=widths,

@@ -31,11 +31,11 @@ class DeepONet(CfdModel):
         act_norm: bool = False,
         act_on_output: bool = False,
     ):
-        '''
+        """
         Args:
         - branch_dim: int, the dimension of the branch net input.
         - trunk_dim: int, the dimension of the trunk net input.
-        '''
+        """
         super().__init__(loss_fn)
         self.branch_dim = branch_dim
         self.trunk_dim = trunk_dim
@@ -65,6 +65,10 @@ class DeepONet(CfdModel):
         self.bias = nn.Parameter(torch.zeros(1))  # type: ignore
         # self.__initialize()
 
+    # NOTE: This is no long used!!
+    # This is the implementation of the ordinary DeepONet, but it is very slow.
+    # Our `forward` is much faster because it re-uses the output
+    # of the branch net for different queries in one batch.
     def forward_vanilla(
         self,
         x_branch: Tensor,
@@ -73,6 +77,11 @@ class DeepONet(CfdModel):
         query_idxs: Optional[Tensor] = None,
     ):
         """
+        NOTE: This is no long used!!
+        This is the implementation of the ordinary DeepONet, but it is very
+        slow! Our `forward` is much faster because it re-uses the output
+        of the branch net for different queries in one batch.
+
         Args:
         - x_branch: (b, branch_dim), input to the branch net.
         - x_trunk: (b), input to the trunk net, a batch of (t, x, y)
@@ -94,10 +103,16 @@ class DeepONet(CfdModel):
             query_idxs = torch.stack(
                 [
                     torch.randint(
-                        0, height, (self.num_label_samples,), device=x_trunk.device
+                        0,
+                        height,
+                        (self.num_label_samples,),
+                        device=x_trunk.device,
                     ),
                     torch.randint(
-                        0, width, (self.num_label_samples,), device=x_trunk.device
+                        0,
+                        width,
+                        (self.num_label_samples,),
+                        device=x_trunk.device,
                     ),
                 ],
                 dim=-1,
@@ -105,7 +120,9 @@ class DeepONet(CfdModel):
         t = x_trunk.unsqueeze(1).float()  # (b, 1)
         x_trunk_t = self.fc_trunk_t(t)  # (b, p)
         # Normalize query location
-        x_trunk_xy = (query_idxs.float() - 32.0) / 64.0  # (k, 2)  # TODO: update this
+        x_trunk_xy = (
+            query_idxs.float() - 32.0
+        ) / 64.0  # (k, 2)  # TODO: update this
         x_trunk_xy = self.fc_trunk_xy(x_trunk_xy)  # (k, p)
         x_trunk_t = x_trunk_t.unsqueeze(1)  # (b, 1, p)
         x_trunk_xy = x_trunk_xy.unsqueeze(0)  # (1, k, p)
@@ -126,7 +143,7 @@ class DeepONet(CfdModel):
             # we have labels[i, j] = label[
             #     i, query_points[i, j, 0], query_points[i, j, 1]]
             labels = label[:, query_idxs[:, 0], query_idxs[:, 1]]  # (b, k)
-            # assert preds.shape == label.shape, f"{preds.shape}, {label.shape}"
+            # assert preds.shape == label.shape, f"{preds.shape} {label.shape}"
             loss = self.loss_fn(preds=preds, labels=labels)  # (b, k)
             print(labels.dtype)
             print(loss.dtype)
@@ -158,10 +175,16 @@ class DeepONet(CfdModel):
             query_idxs = torch.stack(
                 [
                     torch.randint(
-                        0, height, (self.num_label_samples,), device=label.device
+                        0,
+                        height,
+                        (self.num_label_samples,),
+                        device=label.device,
                     ),
                     torch.randint(
-                        0, width, (self.num_label_samples,), device=label.device
+                        0,
+                        width,
+                        (self.num_label_samples,),
+                        device=label.device,
                     ),
                 ],
                 dim=-1,
@@ -187,7 +210,9 @@ class DeepONet(CfdModel):
             # we have labels[i, j] = label[
             #     i, query_points[i, j, 0], query_points[i, j, 1]]
             labels = label[:, query_idxs[:, 0], query_idxs[:, 1]]  # (b, k)
-            assert preds.shape == labels.shape, f"{preds.shape}, {labels.shape}"
+            assert (
+                preds.shape == labels.shape
+            ), f"{preds.shape}, {labels.shape}"
             loss = self.loss_fn(preds=preds, labels=labels)  # (b, k)
             return dict(
                 preds=preds,
