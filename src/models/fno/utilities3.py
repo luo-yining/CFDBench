@@ -44,14 +44,14 @@ class MatReader(object):
         self._load_file()
 
     def read_field(self, field):
-        x = self.data[field]
+        x = self.data[field]  # type: ignore
 
         if not self.old_mat:
-            x = x[()]
-            x = np.transpose(x, axes=range(len(x.shape) - 1, -1, -1))
+            x = x[()]  # type: ignore
+            x = np.transpose(x, axes=range(len(x.shape) - 1, -1, -1))  # type: ignore  # noqa
 
         if self.to_float:
-            x = x.astype(np.float32)
+            x = x.astype(np.float32)  # type: ignore
 
         if self.to_torch:
             x = torch.from_numpy(x)
@@ -98,7 +98,7 @@ class UnitGaussianNormalizer(object):
                 mean = self.mean[:, sample_idx]
 
         # x is in shape of batch*n or T*batch*n
-        x = (x * std) + mean
+        x = (x * std) + mean  # type: ignore
         return x
 
     def cuda(self):
@@ -305,7 +305,7 @@ class HsLoss(object):
                 weight += a[1] ** 2 * (
                     k_x**4 + 2 * k_x**2 * k_y**2 + k_y**4
                 )
-            weight = torch.sqrt(weight)
+            weight = torch.sqrt(weight)  # type: ignore
             loss = self.rel(x * weight, y * weight)
         else:
             loss = self.rel(x, y)
