@@ -1,3 +1,4 @@
 torch
 typed-argument-parser
 tqdm
+h5py

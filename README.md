@@ -98,6 +98,13 @@ The implementation of the models is located in `src/models`
 
 ## How to Run?
 
+### Environment
+
+Tested on:
+
+- PyTorch 1.13.3+cu117
+- Python 3.9.0
+
 ### Prepare Data
 
 Move the data into a `data` directory next to `src` directory, such that the directory
