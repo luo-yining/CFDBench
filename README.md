@@ -151,7 +151,7 @@ Set `--mode test` when executing `train.py` or `train_auto.py`.
 
 See the Results section in the paper. Reduce the batch size if you run out of VRAM.
 
-## How to Add New Models/Dataset?
+## How to Add New Models/Datasets?
 
 Our code is highly extensible and modular, and it is very easy to add new datasets or models.
 
@@ -167,9 +167,32 @@ Then depending on which base model, you have to implement just 2 or 3 methods in
 - Nonautoregressive: `forward`, `generate_one`.
 - Autoregressive: `forward`, `generate_one`, and `generate_many`.
 
+Then, if your model requires new hyperparameters, add them to the argument parsed in `args.py`.
+
+Finally, you should create add a new `elif` in for the instantiation of your model. For autoregressive models, change `init_model` in `utils_auto.py` as follows.
+
+```python
+def init_model(args: Args) -> AutoCfdModel:
+    # ...
+    elif args.model == "your_model_name":
+        model = YourModeClass(
+            in_chan=args.in_chan,
+            out_chan=args.out_chan,
+            n_case_params=n_case_params,
+            loss_fn=loss_fn,
+            some_arg=args.some_arg,
+            # ... more arguments for your model.  (or you can just pass `args`)
+        ).cuda()
+        return model
+```
+
+For nonautoregressive models, change `init_model` in `train.py` in a similar manner.
+
 ### Dataset
 
-Upcoming.
+You just have to implement a new subclass for `CfdDataset` or `CfdAutoDataset` in `dataset/base.py`. Like any PyTorch Dataset, it needs to implement `__getitem__` and `__len__`. But for multi-step inference, it also has to load features into a member attribute named `all_features` which should be a list of Tensor or NumPy arrays.
+
+Then, add a new `elif` in `get_dataset` in `dataset/__init__.py` for the instantiation of your data.
 
 ## Citation
 
