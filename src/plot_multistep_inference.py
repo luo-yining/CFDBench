@@ -88,10 +88,11 @@ def get_scores(problem_name: str, models: List[str]) -> List[List[float]]:
     scores = []
     for model in models:
         args.model = model
-        if problem_name != "cylinder" and model in ["fno", "unet", "resnet"]:
-            subset_name = "prop_bc_geo"
-        else:
-            subset_name = "prop"
+        subset_name = "prop"
+        # if problem_name != "cylinder":
+        #     subset_name = "prop"
+        # else:
+        #     subset_name = "prop"
 
         args.data_name = problem_name + "_" + subset_name
 
@@ -115,15 +116,15 @@ def main():
         "auto_edeeponet",
         "auto_deeponet_cnn",
         "fno",
-        "unet",
+        # "unet",
         # "resnet",
     ]
 
     problems = [
-        "cavity",
-        "tube",
+        # "cavity",
+        # "tube",
         "dam",
-        "cylinder",
+        # "cylinder",
     ]
     for problem_name in problems:
         scores = get_scores(problem_name, MODELS)

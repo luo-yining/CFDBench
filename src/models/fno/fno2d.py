@@ -184,11 +184,13 @@ class Fno2d(AutoCfdModel):
     ) -> Dict:
         """
         Args:
-            input: (b, c, h, w)
-            labels: (b, c, h, w)
+        - input: (b, c, h, w)
+        - labels: (b, c, h, w)
+        - mask: (b, h, w), a binary mask for indicating the geometry
+                1 for interior, 0 for obstacles.
 
-        Returns:
-            output: (b, c, h, w), the solution of the next timestep
+        Returns: a tensor of shape (b, c, h, w), the solution at
+            the next timestep
         """
         batch_size, n_chan, height, width = inputs.shape
 
@@ -200,7 +202,7 @@ class Fno2d(AutoCfdModel):
                 mask = mask.unsqueeze(1)  # (B, 1, h, w)
         inputs = torch.cat([inputs, mask], dim=1)  # (B, c + 1, h, w)
 
-        # 物性
+        # Physical properties
         props = case_params  # (B, p)
         props = props.unsqueeze(-1).unsqueeze(-1)  # (B, p, 1, 1)
         props = props.repeat(1, 1, height, width)  # (B, p, H, W)
@@ -271,7 +273,7 @@ class Fno2d(AutoCfdModel):
         Args:
             x (Tensor): (c, h, w)
             case_params (Tensor): (p)
-            mask (Tensor): (h, w)
+            mask (Tensor): (h, w), 1 for interior, 0 for obstacles.
         Returns:
             output: (steps, c, h, w)
         """

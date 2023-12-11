@@ -110,7 +110,7 @@ def plot(inp: Tensor, label: Tensor, pred: Tensor, out_path: Path):
         left=0.0, right=1, bottom=0.0, top=1, wspace=0, hspace=0
     )
     # [left, bottom, width, height]
-    # cbar_ax = fig.add_axes([0.92, 0.15, 0.01, 0.7])  
+    # cbar_ax = fig.add_axes([0.92, 0.15, 0.01, 0.7])
 
     axs = axs.flatten()
 
@@ -137,8 +137,8 @@ def plot(inp: Tensor, label: Tensor, pred: Tensor, out_path: Path):
     sub_plot(3, pred_arr, "Prediction")
 
     fig.subplots_adjust(right=0.88)
-    cbar_ax = fig.add_axes([0.90, 0.25, 0.02, 0.5])
-    fig.colorbar(last_im, cax=cbar_ax)
+    cbar_ax = fig.add_axes([0.90, 0.25, 0.02, 0.5])  # type: ignore
+    fig.colorbar(last_im, cax=cbar_ax)  # type: ignore
     # # Add a common colorbar
     # fig.colorbar(last_im, cax=cbar_ax)
 
