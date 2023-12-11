@@ -1,4 +1,7 @@
 torch
 typed-argument-parser
+numpy
 tqdm
 h5py
+matplotlib
+seaborn
