@@ -16,7 +16,7 @@
 
 This is the code for the paper: [CFDBench: A Comprehensive Benchmark for Machine Learning Methods in Fluid Dynamics](https://www.preprints.org/manuscript/202309.1550/v1).
 
-CFDBench is a large-scale and comprehensive benchmark for better evaluating machine learning methods in fluid dynamics. It consists of four classic problems in computational fluid dynamics (CFD), with many varying operating parameters such as boundary conditions, domain geometries, and physical properties.
+CFDBench is a large-scale benchmark for better evaluating machine learning methods in fluid dynamics. It consists of four classic problems in computational fluid dynamics (CFD), with many varying operating parameters such as boundary conditions, domain geometries, and physical properties, making it perfect for testing the inference-time generalization ability of surrogate models.
 
 ## Data Generation
 
