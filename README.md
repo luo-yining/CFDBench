@@ -14,11 +14,24 @@
 
 ![flow-examples](figs/flow-examples.png)
 
-This is the code for the paper: [CFDBench: A Comprehensive Benchmark for Machine Learning Methods in Fluid Dynamics](https://www.preprints.org/manuscript/202309.1550/v1).
+This is the code for the paper: [CFDBench: A Large-Scale Benchmark for Machine Learning Methods in Fluid Dynamics](https://www.preprints.org/manuscript/202309.1550/v1).
 
-CFDBench is a large-scale benchmark for better evaluating machine learning methods in fluid dynamics. It consists of four classic problems in computational fluid dynamics (CFD), with many varying operating parameters such as boundary conditions, domain geometries, and physical properties, making it perfect for testing the inference-time generalization ability of surrogate models.
+CFDBench is the first large-scale benchmark for evaluating machine learning methods in fluid dynamics with varied boundary conditions (BCs), physical properties, and domain geometries. It consists of four classic problems in computational fluid dynamics (CFD), with many varying operating parameters, making it perfect for testing the inference-time generalization ability of surrogate models. Such generalizability is essential for avoiding expensive re-training when applying surrogate models to new problems.
 
-## Data Generation
+## Quick Links
+
+- [Data](#data)
+- [Models](#models)
+- [Main Results](#main-results)
+- [How to Run?](#how-to-run)
+- [How to Add New Models/Datasets?](#how-to-add-new-modelsdatasets)
+- [Citation](#citation)
+
+## Data
+
+Main download link: [[click here]](https://cloud.tsinghua.edu.cn/d/435413b55dea434297d1/)
+
+### Data Generation
 
 The directory `generation-code` contains the code for creating the mesh (ICEM code) and the schema code for batch generation in ANSYS Fluent.
 
@@ -26,7 +39,7 @@ The directory `generation-code` contains the code for creating the mesh (ICEM co
 
 The raw generated data is too large for our school's cloud storage. We will send you the raw data directly upon request by email.
 
-## Data Interpolation
+### Data Interpolation
 
 After generating data with numerical algorithms, it is then interpolated to a grid of 64x64. The raw data before interpolation is very large; the link below is the interpolated data.
 
@@ -98,16 +111,22 @@ The implementation of the models is located in `src/models`
 
 ## How to Run?
 
-### Environment
-
 Tested on:
 
 - PyTorch 1.13.3+cu117
 - Python 3.9.0
 
+### Installation
+
+Make sure you have access to CUDA GPU, then setup the environment using
+
+```shell
+pip install -r requirements
+```
+
 ### Prepare Data
 
-Move the data into a `data` directory next to `src` directory, such that the directory
+Move the downloaded data into a `data` directory next to `src` directory, such that the directory
 looks like:
 
 ```
@@ -127,7 +146,23 @@ README.md
 
 ### Training
 
-In the `src` directory, run `train.py` or `train_auto.py` to train non-autoregressive or autoregressive models respectively. Specify the model with `--model`. For example, run FNO on the cavity flow subset with all cases:
+In the `src` directory, run `train.py` or `train_auto.py` to train non-autoregressive or autoregressive models respectively. Specify the model with `--model`, it must be one of the following:
+
+Model | Value for `--model` | Script
+--- | --- | ---
+Non-autoregrssive FFN | `ffn` | `train.py`
+Non-autoregressive DeepONet | `deeponet` | `train.py`
+Autoregressive Auto-FFN | `auto_ffn` | `train_auto.py`
+Autoregressive Auto-DeepONet | `auto_deeponet` | `train_auto.py`
+Autoregressive Auto-EDeepONet | `auto_edeeponet` | `train_auto.py`
+Autoregressive Auto-DeepONetCNN | `auto_deeponet_cnn` | `train_auto.py`
+Autoregressive ResNet | `resnet` | `train_auto.py`
+Autoregressive U-Net | `unet` | `train_auto.py`
+Autoregressive FNO | `fno` | `train_auto.py`
+
+#### Training Examples
+
+For example, run FNO on the cavity flow subset with all cases:
 
 ```bash
 python train_auto.py --model fno --data cavity_prop_bc_geo
@@ -200,8 +235,9 @@ If you find this code useful, please cite our paper:
 
 ```
 @article{CFDBench,
-  title={CFDBench: A Comprehensive Benchmark for Machine Learning Methods in Fluid Dynamics},
+  title={CFDBench: A Large-Scale Benchmark for Machine Learning Methods in Fluid Dynamics},
   author={Yining, Luo and Yingfa, Chen and Zhen, Zhang},
+  url={https://arxiv.org/abs/2310.05963},
   year={2023}
 }
 ```

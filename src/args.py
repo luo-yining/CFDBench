@@ -22,7 +22,10 @@ class Args(Tap):
     """"train" or "test" for train/test only"""
 
     model: str = "deeponet"
-    """One of: 'deeponet', 'unet', 'fno', 'resnet'"""
+    """
+    For autoregressive modeling (`train_auto.py`), it must be one of: ['auto_ffn', 'auto_deeponet', 'auto_edeeponet', 'auto_deeponet_cnn', 'unet', 'fno', 'resnet'],
+    for non-autoregressive modeling (`train.py`), it must be one of: ['ffn', 'deeponet'].
+    """
     in_chan: int = 2
     """Number of input channels, only applicable to autoregressive models"""
     out_chan: int = 2
