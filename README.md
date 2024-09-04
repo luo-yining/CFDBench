@@ -1,7 +1,7 @@
 <h1 align="center">CFDBench</h1>
 
 <div align="center">
-    <a href="https://cloud.tsinghua.edu.cn/d/435413b55dea434297d1/">Data</a> | <a href="https://www.preprints.org/manuscript/202309.1550/v1">Paper (preprints.org)</a> |
+    <a href="https://huggingface.co/datasets/chen-yingfa/CFDBench">🤗Dataset</a> | <a href="https://www.preprints.org/manuscript/202309.1550/v1">Paper (preprints.org)</a> |
     <a href="https://arxiv.org/abs/2310.05963">Paper (arXiv)</a>
 </div>
 
@@ -14,7 +14,7 @@
 
 ![flow-examples](figs/flow-examples.png)
 
-This is the code for the paper: [CFDBench: A Large-Scale Benchmark for Machine Learning Methods in Fluid Dynamics](https://www.preprints.org/manuscript/202309.1550/v1).
+This is the code for the paper: [CFDBench: A Large-Scale Benchmark for Machine Learning Methods in Fluid Dynamics](https://arxiv.org/abs/2310.05963).
 
 CFDBench is the first large-scale benchmark for evaluating machine learning methods in fluid dynamics with varied boundary conditions (BCs), physical properties, and domain geometries. It consists of four classic problems in computational fluid dynamics (CFD), with many varying operating parameters, making it perfect for testing the inference-time generalization ability of surrogate models. Such generalizability is essential for avoiding expensive re-training when applying surrogate models to new problems.
 
@@ -29,7 +29,19 @@ CFDBench is the first large-scale benchmark for evaluating machine learning meth
 
 ## Data
 
-Main download link: [[click here]](https://cloud.tsinghua.edu.cn/d/435413b55dea434297d1/)
+Main download links: 
+
+Interpolated data (~13.4GB):
+
+- [🤗HuggingFace](https://huggingface.co/datasets/chen-yingfa/CFDBench)
+- [Tsinghua Cloud](https://cloud.tsinghua.edu.cn/d/435413b55dea434297d1/)
+
+Raw data (~460GB):
+
+- [🤗HuggingFace](https://huggingface.co/datasets/chen-yingfa/CFDBench-raw)
+- [Baidu Drive (百度网盘)](https://pan.baidu.com/s/1p0q60cv2hFZ7UcIf3XKSaw?pwd=cfd4) (提取码: cfd4)
+
+> You likely do not need the raw data if you are just trying to evaluate and/or train neural networks on our data.
 
 ### Data Generation
 
@@ -37,7 +49,6 @@ The directory `generation-code` contains the code for creating the mesh (ICEM co
 
 > This part takes a lot of time, and you are better off using our generated data instead.
 
-The raw generated data is too large for our school's cloud storage. We will send you the raw data directly upon request by email.
 
 ### Data Interpolation
 
