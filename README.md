@@ -7,7 +7,8 @@
 
 <div align="center">
     Yining Luo, Yingfa Chen, and Zhen Zhang</br>
-    Tsinghua University
+    Tsinghua University</br>
+    chenyingfa1999@qq.com
 </div>
 
 <div></br></div>
@@ -34,7 +35,6 @@ Main download links:
 Interpolated data (~13.4GB):
 
 - [🤗HuggingFace](https://huggingface.co/datasets/chen-yingfa/CFDBench)
-- [Tsinghua Cloud](https://cloud.tsinghua.edu.cn/d/435413b55dea434297d1/)
 
 Raw data (~460GB):
 
