@@ -8,6 +8,7 @@ from models.auto_edeeponet import AutoEDeepONet
 from models.auto_deeponet_cnn import AutoDeepONetCnn
 from models.fno.fno2d import Fno2d
 from models.auto_ffn import AutoFfn
+from models.latent_diffusion import LatentDiffusionCfdModel
 from models.loss import loss_name_to_fn
 from args import Args
 
@@ -36,7 +37,7 @@ def get_input_shapes(args: Args) -> Tuple[int, int, int]:
 
 def init_model(args: Args) -> AutoCfdModel:
     """
-    All instances of autoregressive models goes through this.
+    All instances of autoregressive models go through this.
     """
     loss_fn = loss_name_to_fn(args.loss_name)
     n_rows, n_cols, n_case_params = get_input_shapes(args)
@@ -119,5 +120,13 @@ def init_model(args: Args) -> AutoCfdModel:
             modes2=args.fno_modes_y,
         ).cuda()
         return model
+    elif args.model == "latent_diffusion":
+        model = LatentDiffusionCfdModel(
+        #...
+        vae_weights_path=args.ldm_vae_weights_path,
+        latent_dim=args.ldm_latent_dim,
+    ).cuda()
+        return model
+    
     else:
         raise ValueError(f"Invalid model name: {args.model}")

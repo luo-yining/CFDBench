@@ -1,5 +1,5 @@
 from tap import Tap
-
+from pathlib import Path
 
 class Args(Tap):
     seed: int = 0
@@ -93,6 +93,22 @@ class Args(Tap):
     resnet_hidden_chan: int = 16
     resnet_kernel_size: int = 7
     resnet_padding: int = 3
+
+    # Latent Diffusion Model hyperparameters
+    
+    # Programmatically find the project's root directory.
+    # Path(__file__) is the path to args.py
+    # .parent is src/, .parent.parent is the CFDBench/ root.
+
+    project_root = Path(__file__).parent.parent 
+    
+    # Construct the default path to the VAE weights
+    default_vae_path = project_root / "weights" / "cfd_vae.pt"
+
+    # Define the command-line argument, converting the Path object to a string
+    ldm_vae_weights_path: str = str(default_vae_path)
+    ldm_latent_dim: int = 4
+    ldm_noise_scheduler_timesteps: int = 1000
 
 
 def is_args_valid(args: Args):

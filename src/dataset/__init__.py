@@ -82,6 +82,7 @@ def get_auto_dataset(
     subset_name = data_name[len(problem_name) + 1 :]
     assert delta_time > 0
     print("Loading data...")
+    
     if problem_name == "tube":
         train_data, dev_data, test_data = get_tube_auto_datasets(
             data_dir / problem_name,

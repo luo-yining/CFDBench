@@ -50,6 +50,8 @@ def load_case_data(case_dir: Path) -> Tuple[np.ndarray, Dict[str, float]]:
     width = x_max - x_min
     case_params["height"] = height
     case_params["width"] = width
+    center_x = -x_min
+    center_y = -y_min
 
     dx = width / u.shape[2]
     dy = height / u.shape[1]
@@ -57,7 +59,7 @@ def load_case_data(case_dir: Path) -> Tuple[np.ndarray, Dict[str, float]]:
         for j in range(u.shape[2]):
             x = x_min + j * dx
             y = y_min + i * dy
-            if (x - 0.5) ** 2 + (y - 0.5) ** 2 <= radius**2:
+            if (x - center_x) ** 2 + (y - center_y) ** 2 <= radius**2:
                 mask[:, i, j] = 0
 
     # Pad the left side
