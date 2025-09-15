@@ -1,24 +1,34 @@
 import torch
 from torch import nn
-import torch.nn.functional as F
 from diffusers import AutoencoderKL
+from diffusers.configuration_utils import ConfigMixin
+from diffusers.models.modeling_utils import ModelMixin
 
-class CfdVae(nn.Module):
+class CfdVae(ModelMixin, ConfigMixin):
     """
-    A Variational Autoencoder for CFD data, using the Hugging Face AutoencoderKL model.
+    A custom Variational Autoencoder for CFD data, built using the
+    flexible AutoencoderKL class from Hugging Face diffusers.
     """
-    def __init__(self, in_chan: int = 2, out_chan: int = 2, latent_dim: int = 4):
+    def __init__(self, in_chan=2, out_chan=2, latent_dim=4):
         super().__init__()
-        # Using a standard architecture similar to the one used in Stable Diffusion
+        
+        # Define a custom configuration for our VAE.
+        # This architecture is simpler and tailored for our 2-channel data.
         self.vae = AutoencoderKL(
             in_channels=in_chan,
             out_channels=out_chan,
+            down_block_types=("DownEncoderBlock2D", "DownEncoderBlock2D"),
+            up_block_types=("UpDecoderBlock2D", "UpDecoderBlock2D"),
+            block_out_channels=(64, 128), # Channel configuration at each stage
             latent_channels=latent_dim,
-            block_out_channels=(64, 128), # Reduced complexity for smaller images
-            layers_per_block=2,
-            norm_num_groups=32
+            sample_size=64
         )
 
-    def forward(self, x: torch.Tensor):
-        # The forward pass returns the full output dictionary
+    def forward(self, x):
+        """
+        The forward pass of the VAE.
+        Takes a batch of images and returns the reconstructed images
+        and the latent distribution.
+        """
         return self.vae(x)
+

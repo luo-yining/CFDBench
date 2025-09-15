@@ -1,6 +1,22 @@
 from tap import Tap
 from pathlib import Path
 
+
+
+class VaeArgs(Tap):
+    """Arguments for training the VAE."""
+    data_name: str = "tube_bc"
+    data_dir: str = "../data"
+    num_epochs: int = 50
+    lr: float = 1e-4
+    batch_size: int = 16
+    latent_dim: int = 4
+    kl_weight: float = 1e-6 # Weight for the KL divergence loss term
+    
+    # Define the output path for the trained weights
+    output_weights_path: str = "../weights/cfd_vae.pt"
+
+    
 class Args(Tap):
     seed: int = 0
     output_dir: str = "result"
