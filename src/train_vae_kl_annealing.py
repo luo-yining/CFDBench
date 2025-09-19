@@ -2,30 +2,28 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 from pathlib import Path
-from tap import Tap
-from tqdm import tqdm
+from tqdm.auto import tqdm
 import matplotlib.pyplot as plt
+import torchvision.transforms as T
 import shutil
 import numpy as np
 
 # Imports from the CFDBench project
-from models.cfd_vae import CfdVae2, CfdVae3
+from models.cfd_vae import CfdVae2
 from dataset import get_auto_dataset
-from args import Args
+from args import Args # Import the main Args class
 from dataset.vae import VaeDataset
-
 
 def main():
     """Main function to train the VAE."""
     args = Args().parse_args()
-    print("--- Training VAE ---")
+    print("--- Training VAE with KL Annealing ---")
     print(args)
 
     # --- 1. Load Data ---
     print("Loading data...")
-    # Load both train and dev (validation) splits for early stopping
     splits_to_load = ['train', 'dev']
-
+    
     problem_name = args.data_name.split("_")[0]
     subset_name = args.data_name[len(problem_name) + 1:]
 
@@ -46,7 +44,7 @@ def main():
         load_splits=splits_to_load
     )
     assert train_data_raw is not None and dev_data_raw is not None
-
+    
     train_dataset = VaeDataset(train_data_raw)
     dev_dataset = VaeDataset(dev_data_raw)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
@@ -56,19 +54,23 @@ def main():
 
     # --- 2. Initialize Model and Optimizer ---
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = CfdVae3(in_chan=2, out_chan=2, latent_dim=args.ldm_latent_dim).to(device)
+    model = CfdVae2(in_chan=2, out_chan=2, latent_dim=args.ldm_latent_dim).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-
-      # --- 3. Training Loop with Detailed Logging ---
+    
+    # --- 3. Training Loop with KL Annealing & Early Stopping ---
     print("Starting training loop...")
     best_val_loss = np.inf
     patience_counter = 0
 
     for epoch in range(args.num_epochs):
-        model.train() # Set model to training mode
+        model.train()
         progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{args.num_epochs}")
         
-        total_train_loss, total_train_recon, total_train_kl = 0.0, 0.0, 0.0
+        # --- KL ANNEALING LOGIC ---
+        # Linearly increase the KL weight from 0 to its full value over N epochs
+        current_kl_weight = args.vae_kl_weight * min(1.0, epoch / args.vae_kl_annealing_epochs)
+        progress_bar.set_postfix_str(f"KL Weight: {current_kl_weight:.2e}")
+        # -------------------------
         
         for batch in progress_bar:
             batch = batch.to(device)
@@ -80,49 +82,28 @@ def main():
             
             recon_loss = F.mse_loss(reconstruction, batch)
             kl_loss = posterior.kl().mean()
-            # Use the fixed KL weight directly from args
-            loss = recon_loss + args.vae_kl_weight * kl_loss
+            # Use the dynamically calculated KL weight
+            loss = recon_loss + current_kl_weight * kl_loss
             
             loss.backward()
             optimizer.step()
-            
-            total_train_loss += loss.item()
-            total_train_recon += recon_loss.item()
-            total_train_kl += kl_loss.item()
-            progress_bar.set_postfix(loss=f"{loss.item():.6f}")
 
-        # Calculate average losses for the epoch
-        avg_train_loss = total_train_loss / len(train_loader)
-        avg_train_recon = total_train_recon / len(train_loader)
-        avg_train_kl = total_train_kl / len(train_loader)
-        
-        # --- Validation Step with Detailed Logging ---
+        # --- Validation Step ---
         model.eval()
-        total_val_loss, total_val_recon, total_val_kl = 0.0, 0.0, 0.0
+        total_val_loss = 0.0
         with torch.no_grad():
             for batch in dev_loader:
                 batch = batch.to(device)
                 posterior = model.vae.encode(batch).latent_dist
-                z = posterior.mean
+                z = posterior.sample()
                 reconstruction = model.vae.decode(z).sample
                 recon_loss = F.mse_loss(reconstruction, batch)
                 kl_loss = posterior.kl().mean()
-                loss = recon_loss + args.vae_kl_weight * kl_loss
-                
+                loss = recon_loss + current_kl_weight * kl_loss # Use same weight for consistency
                 total_val_loss += loss.item()
-                total_val_recon += recon_loss.item()
-                total_val_kl += kl_loss.item()
         
         avg_val_loss = total_val_loss / len(dev_loader)
-        avg_val_recon = total_val_recon / len(dev_loader)
-        avg_val_kl = total_val_kl / len(dev_loader)
-        
-        # --- MODIFIED PART: Print detailed log ---
-        print(f"Epoch {epoch+1}:")
-        print(f"  Train -> Total: {avg_train_loss:.6f} | Recon: {avg_train_recon:.6f} | KL: {avg_train_kl:.4f}")
-        print(f"  Valid -> Total: {avg_val_loss:.6f} | Recon: {avg_val_recon:.6f} | KL: {avg_val_kl:.4f}")
-        print(f"  (KL Weight: {args.vae_kl_weight:.2e})")
-        # ----------------------------------------
+        print(f"Epoch {epoch+1}: Val Loss: {avg_val_loss:.6f}")
 
         # --- Early Stopping Logic ---
         if avg_val_loss < best_val_loss - args.early_stopping_delta:
@@ -131,21 +112,19 @@ def main():
             output_path = Path(args.ldm_vae_weights_path)
             output_path.parent.mkdir(parents=True, exist_ok=True)
             torch.save(model.state_dict(), output_path)
-            print(f"✅ Validation loss improved. Saving best model to: {output_path}")
+            print(f"✅ Val loss improved. Saving best model to: {output_path}")
         else:
             patience_counter += 1
-            print(f"Validation loss did not improve. Patience: {patience_counter}/{args.early_stopping_patience}")
 
         if patience_counter >= args.early_stopping_patience:
-            print("🛑 Early stopping triggered. Training finished.")
+            print("🛑 Early stopping triggered.")
             break
     
-    # --- 4. Final Visualization using the best model ---
-    print("Loading best model for final visualization...")
-    # Make sure the weights file exists before trying to load it
+    # --- Final Visualization ---
     if Path(args.ldm_vae_weights_path).exists():
         model.load_state_dict(torch.load(args.ldm_vae_weights_path, map_location=device))
         model.eval()
+        
         with torch.no_grad():
             # Use the dev_loader to get a consistent sample for visualization
             original_sample = next(iter(dev_loader))[0].unsqueeze(0).to(device)
@@ -162,7 +141,5 @@ def main():
             print(f"✅ Reconstruction plot saved to: {image_save_path}")
     else:
         print("Could not find best model weights to create visualization.")
-
-
 if __name__ == "__main__":
     main()

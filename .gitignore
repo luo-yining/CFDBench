@@ -3,3 +3,7 @@ __pycache__
 images
 data
 .DS_Store
+weights/
+*.png
+wget-log
+cfdbench/

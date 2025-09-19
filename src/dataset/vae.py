@@ -1,32 +1,48 @@
-from torch.utils.data import Dataset
 import torch
+from torch.utils.data import Dataset
 import torchvision.transforms as T
-from tqdm.auto import tqdm
+
 
 class VaeDataset(Dataset):
-    """A wrapper dataset that extracts and resizes individual frames for VAE training."""
-    def __init__(self, cfd_auto_dataset):
-        self.frames = []
-        
-        # --- THE FIX: Define a transform to resize the images ---
-        self.transform = T.Compose([
-            T.Resize((64, 64), antialias=True) 
-        ])
-        # ---------------------------------------------------------
+    """
+    A wrapper dataset that extracts and resizes frames for VAE training.
+    Normalization is now optional and controlled by the mean and std parameters.
+    """
+    def __init__(self, cfd_auto_dataset, normalize=True):
+        """
+        Args:
+            cfd_auto_dataset: The raw autoregressive dataset from CFDBench.
+            mean (torch.Tensor, optional): The mean of the dataset for normalization. Defaults to None.
+            std (torch.Tensor, optional): The standard deviation for normalization. Defaults to None.
+        """
+        self.raw_dataset = cfd_auto_dataset
 
-        print("Preprocessing and resizing frames for VAE training...")
-        for i in tqdm(range(len(cfd_auto_dataset))):
-            _, label, _ = cfd_auto_dataset[i]
-            frame = label[:2, :, :] # We only need the u and v channels
-            
-            # Apply the resize transform to each frame
-            resized_frame = self.transform(frame)
-            self.frames.append(resized_frame)
-            
-        self.frames = torch.stack(self.frames)
         
+        # Start with the mandatory resize transformation
+        transforms_list = [
+            T.Resize((64, 64), antialias=True)
+        ]
+        
+        # Only add the normalization step if both mean and std are provided
+        if normalize:
+            # normalization based on dataset mean and std
+            transforms_list.append(T.Normalize(mean=torch.tensor[1.891, 1.806], std=torch.tensor([1.550, 1.574])))
+            print("VaeDataset initialized WITH custom normalization.")
+        else:
+            print("VaeDataset initialized WITHOUT normalization (only resizing).")
+            
+        self.transform = T.Compose(transforms_list)
+        # ---------------------------------------------
+
     def __len__(self):
-        return len(self.frames)
+        return len(self.raw_dataset)
 
     def __getitem__(self, idx):
-        return self.frames[idx]
+        # The logic here remains the same, as it just applies the transform pipeline
+        _, label, _ = self.raw_dataset[idx]
+        frame = label[:2, :, :]
+        
+        # The transform will either be [Resize] or [Resize, Normalize]
+        transformed_frame = self.transform(frame)
+        
+        return transformed_frame

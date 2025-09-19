@@ -77,7 +77,7 @@ class LatentDiffusionCfdModel(AutoCfdModel):
         return {"loss": {"mse": loss, "nmse": loss / (torch.square(noise).mean() + 1e-8)}}
 
     @torch.no_grad()
-    def generate_one(
+    def generate(
         self, inputs: Tensor, case_params: Tensor, mask: Optional[Tensor] = None, num_inference_steps: int = 50
     ) -> Tensor:
         batch_size = inputs.shape[0]
