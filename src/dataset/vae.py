@@ -12,8 +12,7 @@ class VaeDataset(Dataset):
         """
         Args:
             cfd_auto_dataset: The raw autoregressive dataset from CFDBench.
-            mean (torch.Tensor, optional): The mean of the dataset for normalization. Defaults to None.
-            std (torch.Tensor, optional): The standard deviation for normalization. Defaults to None.
+            normalize: bool. whether to normalize the data using mean, std previously calculated
         """
         self.raw_dataset = cfd_auto_dataset
 
@@ -26,7 +25,7 @@ class VaeDataset(Dataset):
         # Only add the normalization step if both mean and std are provided
         if normalize:
             # normalization based on dataset mean and std
-            transforms_list.append(T.Normalize(mean=torch.tensor[1.891, 1.806], std=torch.tensor([1.550, 1.574])))
+            transforms_list.append(T.Normalize(mean=torch.tensor([1.891, 1.806]), std=torch.tensor([1.550, 1.574])))
             print("VaeDataset initialized WITH custom normalization.")
         else:
             print("VaeDataset initialized WITHOUT normalization (only resizing).")

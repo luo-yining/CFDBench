@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 from .base_model import AutoCfdModel
 from .loss import MseLoss
-from .cfd_vae import CfdVae # Import our VAE
+from .cfd_vae import CfdVaeLite # Import our VAE
 from diffusers import UNet2DConditionModel, DDPMScheduler
 
 class LatentDiffusionCfdModel(AutoCfdModel):
@@ -26,19 +26,23 @@ class LatentDiffusionCfdModel(AutoCfdModel):
         self.out_chan = out_chan
         self.n_case_params = n_case_params
 
-        # 1. Load the pre-trained VAE
-        self.vae = CfdVae(in_chan=out_chan, out_chan=out_chan, latent_dim=latent_dim)
-        self.vae.load_state_dict(torch.load(vae_weights_path))
-        self.vae.requires_grad_(False) # FREEZE the VAE
-        self.vae_scale_factor = 8 # VAE downsamples 64x64 to 8x8
+        # --- 1. Load the pre-trained VAE and freeze it ---
+        self.vae = CfdVaeLite(in_chan=self.out_chan, out_chan=self.out_chan, latent_dim=latent_dim)
+        self.vae.load_state_dict(torch.load(vae_weights_path, map_location="cpu"))
+        self.vae.eval()
+        for param in self.vae.parameters():
+            param.requires_grad = False
 
-        # 2. The U-Net now operates on the small latent space
+        # --- 2. Initialize the Diffusion U-Net ---
         self.unet = UNet2DConditionModel(
-            sample_size=image_size // self.vae_scale_factor,
+            sample_size=self.vae.latent_spatial_size,
             in_channels=latent_dim, 
             out_channels=latent_dim,
             cross_attention_dim=self.in_chan + self.n_case_params,
         )
+
+        # Enable gradient checkpointing to save VRAM
+        self.unet.enable_gradient_checkpointing()
 
         self.noise_scheduler = DDPMScheduler(
             num_train_timesteps=noise_scheduler_timesteps,
@@ -52,29 +56,38 @@ class LatentDiffusionCfdModel(AutoCfdModel):
             raise ValueError("LDM requires a label for training.")
 
         batch_size = inputs.shape[0]
+        device = inputs.device
         
         # Step 1: Encode the clean target image into the latent space
         # We only need the mean of the latent distribution for training
         with torch.no_grad():
-            latent_dist = self.vae(label).latent_dist
-            latents = latent_dist.sample() * 0.18215 # Scaling factor used in Stable Diffusion
-        
+            # Call the encoder explicitly to get the latent distribution
+            target_latents_dist = self.vae.vae.encode(label).latent_dist
+            # ---------------
+        target_latents = target_latents_dist.sample() * 4.5578
         # Step 2: Add noise to the latents
-        noise = torch.randn_like(latents)
-        timesteps = torch.randint(0, self.noise_scheduler.config.num_train_timesteps, (batch_size,), device=label.device).long()
-        noisy_latents = self.noise_scheduler.add_noise(latents, noise, timesteps)
+        noise = torch.randn_like(target_latents)
+        timesteps = torch.randint(0, self.noise_scheduler.config.num_train_timesteps, (batch_size,), device=device).long()
+        noisy_latents = self.noise_scheduler.add_noise(target_latents, noise, timesteps)
 
-        # Step 3: Prepare the conditioning signal
         case_params_expanded = case_params.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, inputs.shape[2], inputs.shape[3])
         conditioning_signal = torch.cat([inputs, case_params_expanded], dim=1)
         conditioning_signal = conditioning_signal.view(batch_size, self.in_chan + self.n_case_params, -1)
+        # Permute the dimensions to [Batch, SequenceLength, FeatureDimension]
+        conditioning_signal = conditioning_signal.permute(0, 2, 1)
 
-        # Step 4: Predict the noise in the latent space
-        noise_pred = self.unet(sample=noisy_latents, timestep=timesteps, encoder_hidden_states=conditioning_signal).sample
+        noise_pred = self.unet(
+            sample=noisy_latents, 
+            timestep=timesteps, 
+            encoder_hidden_states=conditioning_signal
+        ).sample
 
-        # Step 5: Calculate loss on the latent noise
         loss = F.mse_loss(noise_pred, noise)
-        return {"loss": {"mse": loss, "nmse": loss / (torch.square(noise).mean() + 1e-8)}}
+
+        return {
+            "preds": noise_pred,
+            "loss": {"mse": loss, "nmse": loss / (torch.square(noise).mean() + 1e-8)}
+        }
 
     @torch.no_grad()
     def generate(
@@ -101,7 +114,7 @@ class LatentDiffusionCfdModel(AutoCfdModel):
             latents = self.noise_scheduler.step(noise_pred, t, latents).prev_sample
 
         # Decode the clean latents back to a full-resolution image
-        latents = 1 / 0.18215 * latents # Unscale
+        latents = 1 / 4.5578 * latents # Unscale
         image = self.vae.vae.decode(latents).sample
         return image
 

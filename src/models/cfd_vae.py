@@ -106,3 +106,39 @@ class CfdVae3(ModelMixin, ConfigMixin):
         samples from the latent distribution, and decodes them back into images.
         """
         return self.vae(x)
+    
+    
+class CfdVaeLite(ModelMixin, ConfigMixin):
+    """
+    A lightweight, efficient wrapper for a custom-configured VAE, tailored for 
+    64x64 CFD data. It achieves a 1/32 compression rate with a much smaller
+    parameter count than the standard deep architecture.
+    """
+    @register_to_config
+    def __init__(self, in_chan: int, out_chan: int, latent_dim: int = 4):
+        super().__init__()
+        
+        self.in_channels = in_chan
+        self.out_channels = out_chan
+        self.latent_channels = latent_dim
+        self.latent_spatial_size = 8 
+
+        # --- MODIFIED ARCHITECTURE ---
+        # We reduce the number of channels at each block to create a much lighter model.
+        self.vae = AutoencoderKL(
+            in_channels=in_chan,
+            out_channels=out_chan,
+            down_block_types=("DownEncoderBlock2D", "DownEncoderBlock2D", "DownEncoderBlock2D", "DownEncoderBlock2D"),
+            up_block_types=("UpDecoderBlock2D", "UpDecoderBlock2D", "UpDecoderBlock2D", "UpDecoderBlock2D"),
+            # Halved the number of channels at each stage
+            block_out_channels=(32, 64, 128, 256), 
+            latent_channels=latent_dim,
+            sample_size=64,
+        )
+
+    def forward(self, x: Tensor) -> Dict[str, Tensor]:
+        """
+        The forward method for the VAE.
+        """
+        return self.vae(x)
+
