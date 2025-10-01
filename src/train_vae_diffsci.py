@@ -1,47 +1,52 @@
 import torch
 import torch.nn.functional as F
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 from pathlib import Path
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from tap import Tap
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import shutil
 import numpy as np
 
-# Imports from the CFDBench project
-from models.cfd_vae import CfdVae2, CfdVae3, CfdVaeLite
+# --- Updated Imports ---
+# 1. Import the AutoencoderKL model and the new Args class
+from diffsci.models.nets.autoencoderldm2d import AutoencoderKL
+from args import Args # Assuming your new Args class is in args.py
+
+# (Assuming these are your existing project imports)
 from dataset import get_auto_dataset
-from args import Args
 from dataset.vae import VaeDataset
 
 
 def plot_loss_history(history, save_path):
     """
-    Plots the training (per-step) and validation (per-epoch) loss curves.
-    A moving average is used to smooth the noisy training loss for better visualization.
+    Plots training and validation loss curves using an Exponential Moving Average (EMA)
+    to smooth the noisy training loss for better visualization.
     """
     fig, axes = plt.subplots(1, 3, figsize=(22, 6))
     fig.suptitle("VAE Training Loss History (per Step)", fontsize=16)
 
-    # Helper function for moving average
-    def moving_average(data, window_size=100):
-        if len(data) < window_size:
-            return np.array([]) # Not enough data for a moving average
-        return np.convolve(data, np.ones(window_size), 'valid') / window_size
+    # --- NEW: Exponential Moving Average Helper Function ---
+    def exponential_moving_average(data, beta=0.99):
+        """
+        Computes the exponential moving average of a time series.
+        - beta: The smoothing factor. Higher beta means more smoothing.
+        """
+        ema_data = np.zeros_like(data, dtype=float)
+        ema_data[0] = data[0]
+        for i in range(1, len(data)):
+            ema_data[i] = beta * ema_data[i-1] + (1 - beta) * data[i]
+        return ema_data
 
     # --- Plot Total Loss ---
     train_steps = np.arange(len(history['train_total']))
     axes[0].plot(train_steps, history['train_total'], label='Train Loss (Raw)', alpha=0.2, color='lightblue')
-    
-    # Plot smoothed training loss
-    avg_train_loss = moving_average(history['train_total'])
-    # Adjust steps for the moving average window to be centered
-    if avg_train_loss.any():
-        avg_steps = np.arange(len(avg_train_loss)) + (100 // 2)
-        axes[0].plot(avg_steps, avg_train_loss, label='Train Loss (Smoothed)', color='blue')
-    
-    # Plot validation loss as a staircase plot, aligned with training steps
+
+    # Plot smoothed EMA training loss
+    if len(history['train_total']) > 1:
+        ema_train_loss = exponential_moving_average(history['train_total'])
+        axes[0].plot(train_steps, ema_train_loss, label='Train Loss (Smoothed EMA)', color='blue')
+
     axes[0].step(history['val_steps'], history['val_total'], label='Validation Loss', where='post', color='orange', linewidth=2)
     axes[0].set_title("Total Loss")
     axes[0].set_xlabel("Training Step")
@@ -52,10 +57,9 @@ def plot_loss_history(history, save_path):
 
     # --- Plot Reconstruction Loss ---
     axes[1].plot(train_steps, history['train_recon'], label='Train Recon Loss (Raw)', alpha=0.2, color='lightblue')
-    avg_train_recon = moving_average(history['train_recon'])
-    if avg_train_recon.any():
-        avg_steps = np.arange(len(avg_train_recon)) + (100 // 2)
-        axes[1].plot(avg_steps, avg_train_recon, label='Train Recon Loss (Smoothed)', color='blue')
+    if len(history['train_recon']) > 1:
+        ema_train_recon = exponential_moving_average(history['train_recon'])
+        axes[1].plot(train_steps, ema_train_recon, label='Train Recon Loss (Smoothed EMA)', color='blue')
     axes[1].step(history['val_steps'], history['val_recon'], label='Validation Recon Loss', where='post', color='orange', linewidth=2)
     axes[1].set_title("Reconstruction Loss")
     axes[1].set_xlabel("Training Step")
@@ -65,10 +69,9 @@ def plot_loss_history(history, save_path):
 
     # --- Plot KL Loss ---
     axes[2].plot(train_steps, history['train_kl'], label='Train KL Loss (Raw)', alpha=0.2, color='lightblue')
-    avg_train_kl = moving_average(history['train_kl'])
-    if avg_train_kl.any():
-        avg_steps = np.arange(len(avg_train_kl)) + (100 // 2)
-        axes[2].plot(avg_steps, avg_train_kl, label='Train KL Loss (Smoothed)', color='blue')
+    if len(history['train_kl']) > 1:
+        ema_train_kl = exponential_moving_average(history['train_kl'])
+        axes[2].plot(train_steps, ema_train_kl, label='Train KL Loss (Smoothed EMA)', color='blue')
     axes[2].step(history['val_steps'], history['val_kl'], label='Validation KL Loss', where='post', color='orange', linewidth=2)
     axes[2].set_title("KL Divergence")
     axes[2].set_xlabel("Training Step")
@@ -79,17 +82,18 @@ def plot_loss_history(history, save_path):
     plt.savefig(save_path)
     print(f"✅ Loss history plot saved to: {save_path}")
 
+
 def main():
     """Main function to train the VAE."""
+    # When running in a notebook, pass an empty list to parse_args
     args = Args().parse_args()
-    print("--- Training VAE ---")
+    print("--- Training AutoencoderKL ---")
     print(args)
 
     # --- 1. Load Data ---
+    # This section remains the same
     print("Loading data...")
-    # Load both train and dev (validation) splits for early stopping
     splits_to_load = ['train', 'dev']
-
     problem_name = args.data_name.split("_")[0]
     subset_name = args.data_name[len(problem_name) + 1:]
 
@@ -100,7 +104,7 @@ def main():
                 print(f"Deleting outdated cache for '{split}' split at: {cache_dir_to_delete}")
                 shutil.rmtree(cache_dir_to_delete)
                 print("Cache deleted.")
-        
+    
     train_data_raw, dev_data_raw, _ = get_auto_dataset(
         data_dir=Path(args.data_dir),
         data_name=args.data_name,
@@ -118,116 +122,133 @@ def main():
     print(f"Train dataset created with {len(train_dataset)} frames.")
     print(f"Validation dataset created with {len(dev_dataset)} frames.")
 
-      # --- history dictionary for per-step logging ---
     history = {
         'train_total': [], 'train_recon': [], 'train_kl': [],
         'val_total': [], 'val_recon': [], 'val_kl': [],
-        'val_steps': [] # To align validation epochs with training steps
+        'val_steps': []
     }
-    # -----------------------------------------------------------------
 
-    # --- 2. Initialize Model and Optimizer ---
+    # --- 2. Initialize Model and Optimizer (Updated) ---
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = CfdVaeLite(in_chan=2, out_chan=2, latent_dim=args.ldm_latent_dim).to(device)
+    
+    # 2a. Get configurations from the Args class
+    dd_config = args.get_ddconfig()
+    loss_config = args.get_lossconfig()
+
+    # 2b. Instantiate the AutoencoderKL model
+    model = AutoencoderKL(
+        ddconfig=dd_config,
+        lossconfig=loss_config,
+        embed_dim=args.embed_dim
+    ).to(device)
+    
+    # The optimizer now targets the parameters of the AutoencoderKL model
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.vae_weight_decay)
 
-    # --- Initialize the Scheduler ---
     scheduler = ReduceLROnPlateau(
         optimizer,
-        mode='min', # It will monitor the validation loss for a minimum
-        factor=args.lr_scheduler_factor, # Factor to reduce LR by (e.g., 0.5)
-        patience=args.lr_scheduler_patience, # How many epochs to wait (e.g., 5)
-        verbose=True # Print a message to the console when the LR is changed
+        mode='min',
+        factor=args.lr_scheduler_factor,
+        patience=args.lr_scheduler_patience
     )
-    # -----------------------------------------------
 
-      # --- 3. Training Loop with Detailed Logging ---
+    # --- 3. Training Loop (Updated) ---
     print("Starting training loop...")
     best_val_loss = np.inf
     patience_counter = 0
     global_step = 0
 
     for epoch in range(args.num_epochs):
-        model.train() # Set model to training mode
+        model.train()
         progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{args.num_epochs}")
         
+        # We still track these for logging purposes
         total_train_loss, total_train_recon, total_train_kl = 0.0, 0.0, 0.0
         
         for batch in progress_bar:
             batch = batch.to(device)
             optimizer.zero_grad()
             
-            posterior = model.vae.encode(batch).latent_dist
-            z = posterior.sample()
-            reconstruction = model.vae.decode(z).sample
+            # 3a. New forward pass and loss calculation
+            reconstructions, posterior = model(batch)
             
-            recon_loss = F.mse_loss(reconstruction, batch)
-            kl_loss = posterior.kl().mean()
-            # Use the fixed KL weight directly from args
-            loss = recon_loss + args.vae_kl_weight * kl_loss
+            # The model's internal loss function computes everything for us
+            loss, log_dict = model.loss(
+                batch,
+                reconstructions,
+                posterior,
+                0, # optimizer_idx (not used with single optimizer)
+                global_step,
+                last_layer=model.get_last_layer(),
+                split="train"
+            )
             
             loss.backward()
             optimizer.step()
 
-             # --- Log per-batch loss ---
+            # 3b. Log metrics from the dictionary returned by the loss function
+            recon_loss = log_dict["train/rec_loss"]
+            kl_loss = log_dict["train/kl_loss"]
+            
             history['train_total'].append(loss.item())
-            history['train_recon'].append(recon_loss.item())
-            history['train_kl'].append(kl_loss.item())
+            history['train_recon'].append(recon_loss) # Already a float
+            history['train_kl'].append(kl_loss)       # Already a float
             global_step += 1
             
             total_train_loss += loss.item()
-            total_train_recon += recon_loss.item()
-            total_train_kl += kl_loss.item()
+            total_train_recon += recon_loss
+            total_train_kl += kl_loss
             progress_bar.set_postfix(loss=f"{loss.item():.6f}")
 
-        # Calculate average losses for the epoch
         avg_train_loss = total_train_loss / len(train_loader)
         avg_train_recon = total_train_recon / len(train_loader)
         avg_train_kl = total_train_kl / len(train_loader)
 
- 
-        # --- Validation Step with Detailed Logging ---
+        # --- Validation Step (Updated) ---
         model.eval()
         total_val_loss, total_val_recon, total_val_kl = 0.0, 0.0, 0.0
         with torch.no_grad():
             for batch in dev_loader:
                 batch = batch.to(device)
-                posterior = model.vae.encode(batch).latent_dist
-                z = posterior.mean
-                reconstruction = model.vae.decode(z).sample
-                recon_loss = F.mse_loss(reconstruction, batch)
-                kl_loss = posterior.kl().mean()
-                loss = recon_loss + args.vae_kl_weight * kl_loss
+                reconstructions, posterior = model(batch)
+                
+                # Use the same internal loss function for validation
+                loss, log_dict = model.loss(
+                    batch,
+                    reconstructions,
+                    posterior,
+                    0,
+                    global_step,
+                    last_layer=model.get_last_layer(),
+                    split="val"
+                )
+                
+                # Get metrics from the log dictionary
+                recon_loss = log_dict["val/rec_loss"]
+                kl_loss = log_dict["val/kl_loss"]
                 
                 total_val_loss += loss.item()
-                total_val_recon += recon_loss.item()
-                total_val_kl += kl_loss.item()
+                total_val_recon += recon_loss
+                total_val_kl += kl_loss
         
         avg_val_loss = total_val_loss / len(dev_loader)
         avg_val_recon = total_val_recon / len(dev_loader)
         avg_val_kl = total_val_kl / len(dev_loader)
 
-        
-        # --- Log validation score at the current step number ---
         history['val_total'].append(avg_val_loss)
         history['val_recon'].append(avg_val_recon)
         history['val_kl'].append(avg_val_kl)
         history['val_steps'].append(global_step)
 
-
-        # --- Step the Scheduler ---
-        # The scheduler's step is called with the validation loss after each epoch.
-        # It will automatically reduce the LR if the loss plateaus.
         scheduler.step(avg_val_loss)
         
-        # --- Print detailed log ---
         print(f"Epoch {epoch+1}:")
         print(f"  Train -> Total: {avg_train_loss:.6f} | Recon: {avg_train_recon:.6f} | KL: {avg_train_kl:.4f}")
         print(f"  Valid -> Total: {avg_val_loss:.6f} | Recon: {avg_val_recon:.6f} | KL: {avg_val_kl:.4f}")
-        print(f"  (KL Weight: {args.vae_kl_weight:.2e})")
-        # ----------------------------------------
+        # Note: kl_weight is now part of the model's loss config, not an arg used every step
+        print(f"  (KL Weight in model config: {args.kl_weight:.2e})")
 
-        # --- Early Stopping Logic ---
+        # --- Early Stopping Logic (Remains the same) ---
         if avg_val_loss < best_val_loss - args.early_stopping_delta:
             best_val_loss = avg_val_loss
             patience_counter = 0
@@ -243,16 +264,16 @@ def main():
             print("🛑 Early stopping triggered. Training finished.")
             break
     
-    # --- 4. Final Visualization using the best model ---
+    # --- 4. Final Visualization (Updated) ---
     print("Loading best model for final visualization...")
-    # Make sure the weights file exists before trying to load it
     if Path(args.ldm_vae_weights_path).exists():
-        model.load_state_dict(torch.load(args.ldm_vae_weights_path, map_location=device))
+        model.load_state_dict(torch.load(args.ldm_vae_weights_path, map_location=device, weights_only=False))
         model.eval()
         with torch.no_grad():
-            # Use the dev_loader to get a consistent sample for visualization
             original_sample = next(iter(dev_loader))[0].unsqueeze(0).to(device)
-            reconstructed_sample = model(original_sample).sample
+            
+            # 4a. Get reconstruction from the model's forward pass
+            reconstructed_sample, _ = model(original_sample)
 
             fig, axs = plt.subplots(1, 2, figsize=(10, 5))
             axs[0].imshow(original_sample[0, 0].cpu().numpy(), cmap='viridis')
@@ -266,10 +287,8 @@ def main():
     else:
         print("Could not find best model weights to create visualization.")
 
-    # --- Plot and save the loss history ---
-    loss_plot_path = output_path.parent / "vae_loss_history.png"
+    loss_plot_path = Path(args.ldm_vae_weights_path).parent / "vae_loss_history.png"
     plot_loss_history(history, loss_plot_path)
-    # ----------------------------------------------------
 
 
 if __name__ == "__main__":
