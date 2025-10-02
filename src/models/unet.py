@@ -138,6 +138,7 @@ class UNet(AutoCfdModel):
             )
         else:
             self.in_conv = DoubleConv(in_chan + 1, dim)  # + 1 for mask
+
         self.down1 = Down(dim, dim * 2)
         self.down2 = Down(dim * 2, dim * 4)
         self.down3 = Down(dim * 4, dim * 8)
@@ -258,4 +259,5 @@ class UNet(AutoCfdModel):
     ) -> Tensor:
         outputs = self.forward(inputs, case_params=case_params, mask=mask)
         preds = outputs["preds"]
+        
         return preds
