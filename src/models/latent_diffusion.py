@@ -10,6 +10,11 @@ from .cfd_vae import CfdVaeLite # Import our VAE
 from diffusers import UNet2DConditionModel, DDPMScheduler
 
 class LatentDiffusionCfdModel(AutoCfdModel):
+    """
+    Latent Diffusion Model using cross-attention conditioning.
+
+    Original implementation of latent diffusion for CFD.
+    """
     def __init__(
         self,
         in_chan: int,
@@ -20,11 +25,13 @@ class LatentDiffusionCfdModel(AutoCfdModel):
         image_size: int = 64,
         latent_dim: int = 4,
         noise_scheduler_timesteps: int = 1000,
+        scaling_factor: float = 4.5578,
     ):
         super().__init__(loss_fn)
         self.in_chan = in_chan
         self.out_chan = out_chan
         self.n_case_params = n_case_params
+        self.scaling_factor = scaling_factor
 
         # --- 1. Load the pre-trained VAE and freeze it ---
         self.vae = CfdVaeLite(in_chan=self.out_chan, out_chan=self.out_chan, latent_dim=latent_dim)
@@ -63,8 +70,7 @@ class LatentDiffusionCfdModel(AutoCfdModel):
         with torch.no_grad():
             # Call the encoder explicitly to get the latent distribution
             target_latents_dist = self.vae.vae.encode(label).latent_dist
-            # ---------------
-        target_latents = target_latents_dist.sample() * 4.5578
+            target_latents = target_latents_dist.sample() * self.scaling_factor
         # Step 2: Add noise to the latents
         noise = torch.randn_like(target_latents)
         timesteps = torch.randint(0, self.noise_scheduler.config.num_train_timesteps, (batch_size,), device=device).long()
@@ -114,7 +120,7 @@ class LatentDiffusionCfdModel(AutoCfdModel):
             latents = self.noise_scheduler.step(noise_pred, t, latents).prev_sample
 
         # Decode the clean latents back to a full-resolution image
-        latents = 1 / 4.5578 * latents # Unscale
+        latents = latents / self.scaling_factor  # Unscale
         image = self.vae.vae.decode(latents).sample
         return image
 

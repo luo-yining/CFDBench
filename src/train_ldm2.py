@@ -17,14 +17,13 @@ from torch.amp import GradScaler
 # -----------------------------------------------------------
 
 # Imports from the CFDBench project
-from models.latent_diffusion import LatentDiffusionCfdModel
-from models.ldm2 import LatentDiffusionCfdModel2
+from models.ldm2 import LatentDiffusionCfdModel2, LatentDiffusionCfdModelLite
 from dataset import get_auto_dataset
-from utils_auto import init_model 
+from utils_auto import init_model
 from utils import plot_predictions, dump_json, load_best_ckpt
 from args import Args
 
-def evaluate_ldm(model: LatentDiffusionCfdModel, dataloader, device, output_dir: Path, plot_interval: int = 50, max_eval_batches: int = 50):
+def evaluate_ldm(model: LatentDiffusionCfdModel2, dataloader, device, output_dir: Path, plot_interval: int = 50, max_eval_batches: int = 50):
     """
     Custom evaluation function for the Latent Diffusion Model.
     The mask is used here to ensure the loss is only calculated in valid fluid regions.
@@ -45,13 +44,23 @@ def evaluate_ldm(model: LatentDiffusionCfdModel, dataloader, device, output_dir:
             # The collate_fn now provides the mask as a separate item
             inputs, label, case_params, mask = batch
             inputs, label, case_params, mask = inputs.to(device), label.to(device), case_params.to(device), mask.to(device)
-            
+
+            # Debug shapes on first iteration
+            if i == 0:
+                print(f"Debug shapes - inputs: {inputs.shape}, label: {label.shape}, mask: {mask.shape}")
+
             # Use mixed precision for evaluation too
-            with autocast(device_type='cuda' if device.type == 'cuda' else 'cpu', dtype=torch.float16):
+            with autocast(device_type=device.type, dtype=torch.float16, enabled=True):
                 # The generate function only receives the 2-channel velocity input
                 generated_frame = model.generate(inputs=inputs, case_params=case_params)
-            
+
+            # Ensure mask has proper shape - should be [B, 1, H, W] or broadcastable
+            # If mask has multiple channels, use only the first one (they're all the same)
+            if mask.dim() == 4 and mask.shape[1] > 1:
+                mask = mask[:, 0:1, :, :]  # Keep only first channel as [B, 1, H, W]
+
             # Apply the mask to both the prediction and the label for a fair comparison
+            # Broadcasting will automatically expand mask from [B, 1, H, W] to match [B, 2, H, W]
             loss = F.mse_loss(generated_frame * mask, label * mask)
             nmse = loss / (torch.square(label * mask).mean() + 1e-8)
             total_nmse += nmse.item()
@@ -70,26 +79,17 @@ def evaluate_ldm(model: LatentDiffusionCfdModel, dataloader, device, output_dir:
             
             # Clear tensors immediately
             del inputs, label, case_params, mask, generated_frame, loss, nmse
-            
-            # Clear cache periodically during evaluation
-            if i % 5 == 0:
-                torch.cuda.empty_cache()
 
     avg_nmse = total_nmse / num_batches
     print(f"Evaluation NMSE (on {num_batches} batches): {avg_nmse:.6f}")
     return {"mean": {"nmse": avg_nmse}}
 
-def train_ldm(model: LatentDiffusionCfdModel, train_loader, dev_loader, args, device):
+def train_ldm(model: LatentDiffusionCfdModel2, train_loader, dev_loader, args, device):
     """ Main training loop for the Latent Diffusion Model. """
     optimizer = torch.optim.AdamW(model.unet.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     
     # Initialize the Gradient Scaler for Automatic Mixed Precision
-    scaler = GradScaler(device.type, enabled=args.use_mixed_precision)
-    
-    # Enable gradient checkpointing if available (saves memory at cost of speed)
-    if hasattr(model.unet, 'enable_gradient_checkpointing'):
-        model.unet.enable_gradient_checkpointing()
-        print("✓ Enabled gradient checkpointing")
+    scaler = GradScaler(enabled=args.use_mixed_precision)
     
     # Implement gradient accumulation
     gradient_accumulation_steps = getattr(args, 'gradient_accumulation_steps', 4)
@@ -100,9 +100,7 @@ def train_ldm(model: LatentDiffusionCfdModel, train_loader, dev_loader, args, de
     for epoch in range(args.num_epochs):
         model.train()
         progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{args.num_epochs}")
-        
-        optimizer.zero_grad(set_to_none=True)
-        
+
         for batch_idx, batch in enumerate(progress_bar):
             # Mask is available from collate_fn but not used in the training forward pass
             inputs, label, case_params, _ = batch
@@ -112,11 +110,17 @@ def train_ldm(model: LatentDiffusionCfdModel, train_loader, dev_loader, args, de
             with autocast(device_type=device.type, dtype=torch.float16, enabled=args.use_mixed_precision):
                 outputs = model(inputs=inputs, label=label, case_params=case_params)
                 loss = outputs["loss"]["mse"]
-                
+
                 # Scale loss by accumulation steps
                 loss = loss / gradient_accumulation_steps
             # --------------------------------------------
-            
+
+            # Check for NaN/Inf in loss
+            if torch.isnan(loss) or torch.isinf(loss):
+                print(f"Warning: Invalid loss detected at epoch {epoch}, batch {batch_idx}. Skipping batch.")
+                del inputs, label, case_params, outputs, loss
+                continue
+
             # Use the scaler for the backward pass
             scaler.scale(loss).backward()
             
@@ -125,15 +129,11 @@ def train_ldm(model: LatentDiffusionCfdModel, train_loader, dev_loader, args, de
                 scaler.step(optimizer)
                 scaler.update()
                 optimizer.zero_grad(set_to_none=True)
-            
+
             progress_bar.set_postfix(loss=f"{loss.item() * gradient_accumulation_steps:.6f}")
-            
+
             # Clear intermediates
             del inputs, label, case_params, outputs, loss
-            
-            # Periodic cache clearing during training
-            if batch_idx % 20 == 0:
-                torch.cuda.empty_cache()
 
         # Clear cache and run garbage collection before evaluation
         torch.cuda.empty_cache()
@@ -221,21 +221,30 @@ def main():
 
     # --- 3. Create Final DataLoaders ---
     def collate_fn_ldm(batch):
-        inputs_raw, labels_raw, case_params_dict = zip(*batch)
-        
-        inputs = torch.stack(inputs_raw)
-        labels = torch.stack(labels_raw)
-        
+        """
+        Collate function for LDM training.
+
+        Returns:
+            input_velocities: [B, 2, H, W] - u and v velocity fields
+            output_velocities: [B, 2, H, W] - target u and v velocity fields
+            case_params: [B, n_params] - case parameters tensor
+            mask: [B, 1, H, W] - mask for valid regions
+        """
+        inputs_list, labels_list, case_params_list = zip(*batch)
+
+        inputs = torch.stack(inputs_list)
+        labels = torch.stack(labels_list)
+
         # Separate the mask from the input velocities
         input_velocities = inputs[:, :2]  # Channels 0, 1 are u, v
         mask = inputs[:, 2:]             # Channel 2 is the mask
-        
+
         # The label should only be the velocities
         output_velocities = labels[:, :2]
-        
-        keys = case_params_dict[0].keys()
-        case_params = torch.tensor([[d[k] for k in keys] for d in case_params_dict])
-        
+
+        keys = case_params_list[0].keys()
+        case_params = torch.tensor([[d[k] for k in keys] for d in case_params_list])
+
         # Return the mask as a separate item
         return input_velocities, output_velocities, case_params, mask
 

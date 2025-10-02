@@ -10,6 +10,13 @@ from .cfd_vae import CfdVaeLite # Import our VAE
 from diffusers import UNet2DConditionModel, DDPMScheduler, UNet2DModel
 
 class LatentDiffusionCfdModel2(AutoCfdModel):
+    """
+    Latent Diffusion Model using cross-attention conditioning.
+
+    Uses a pre-trained VAE to compress flow fields to latent space, then
+    trains a diffusion model with cross-attention conditioning on velocity
+    fields and case parameters.
+    """
     def __init__(
         self,
         in_chan: int,
@@ -20,6 +27,7 @@ class LatentDiffusionCfdModel2(AutoCfdModel):
         image_size: int = 64,
         latent_dim: int = 4,
         noise_scheduler_timesteps: int = 1000,
+        scaling_factor: float = 4.5578,
         # NEW: Memory-efficient U-Net parameters
         unet_base_channels: int = 64,  # Reduced from default 128/256
         unet_channel_mult: tuple = (1, 2, 4),  # Reduced depth
@@ -30,6 +38,7 @@ class LatentDiffusionCfdModel2(AutoCfdModel):
         self.in_chan = in_chan
         self.out_chan = out_chan
         self.n_case_params = n_case_params
+        self.scaling_factor = scaling_factor
 
         # --- 1. Load the pre-trained VAE and freeze it ---
         self.vae = CfdVaeLite(in_chan=self.out_chan, out_chan=self.out_chan, latent_dim=latent_dim)
@@ -80,18 +89,35 @@ class LatentDiffusionCfdModel2(AutoCfdModel):
     def forward(
         self, inputs: Tensor, case_params: Tensor, label: Optional[Tensor] = None, mask: Optional[Tensor] = None
     ) -> Dict[str, Tensor]:
+        """
+        Training forward pass.
+
+        Args:
+            inputs: Input velocity field [B, in_chan, H, W]
+            case_params: Case parameters [B, n_case_params]
+            label: Target velocity field [B, out_chan, H, W]
+            mask: Optional mask tensor [H, W] or [B, 1, H, W]
+
+        Returns:
+            Dictionary containing predictions and losses
+        """
         if label is None:
             raise ValueError("LDM requires a label for training.")
 
+        # Validate input shapes
+        assert inputs.shape[1] == self.in_chan, f"Expected {self.in_chan} input channels, got {inputs.shape[1]}"
+        assert label.shape[1] == self.out_chan, f"Expected {self.out_chan} output channels, got {label.shape[1]}"
+        assert case_params.shape[1] == self.n_case_params, f"Expected {self.n_case_params} case params, got {case_params.shape[1]}"
+
         batch_size = inputs.shape[0]
         device = inputs.device
-        
+
         # Step 1: Encode the clean target image into the latent space
         # We only need the mean of the latent distribution for training
         with torch.no_grad():
             # Call the encoder explicitly to get the latent distribution
             target_latents_dist = self.vae.vae.encode(label).latent_dist
-            target_latents = target_latents_dist.sample() * 4.5578
+            target_latents = target_latents_dist.sample() * self.scaling_factor
             
         # Step 2: Add noise to the latents
         noise = torch.randn_like(target_latents)
@@ -123,6 +149,18 @@ class LatentDiffusionCfdModel2(AutoCfdModel):
     def generate(
         self, inputs: Tensor, case_params: Tensor, mask: Optional[Tensor] = None, num_inference_steps: int = 50
     ) -> Tensor:
+        """
+        Generate next frame using diffusion sampling.
+
+        Args:
+            inputs: Input velocity field [B, in_chan, H, W]
+            case_params: Case parameters [B, n_case_params]
+            mask: Optional mask tensor
+            num_inference_steps: Number of denoising steps
+
+        Returns:
+            Generated velocity field [B, out_chan, H, W]
+        """
         batch_size = inputs.shape[0]
 
         # Prepare conditioning signal
@@ -130,7 +168,7 @@ class LatentDiffusionCfdModel2(AutoCfdModel):
         conditioning_signal = torch.cat([inputs, case_params_expanded], dim=1)
         conditioning_signal = conditioning_signal.view(batch_size, self.in_chan + self.n_case_params, -1)
         conditioning_signal = conditioning_signal.permute(0, 2, 1)
-        
+
         # Start with random noise in the latent space
         latents = torch.randn(
             (batch_size, self.vae.vae.latent_channels, self.unet.config.sample_size, self.unet.config.sample_size),
@@ -142,14 +180,14 @@ class LatentDiffusionCfdModel2(AutoCfdModel):
         # Denoising loop in latent space
         for t in self.noise_scheduler.timesteps:
             noise_pred = self.unet(
-                sample=latents, 
-                timestep=t, 
+                sample=latents,
+                timestep=t,
                 encoder_hidden_states=conditioning_signal
             ).sample
             latents = self.noise_scheduler.step(noise_pred, t, latents).prev_sample
 
         # Decode the clean latents back to a full-resolution image
-        latents = 1 / 4.5578 * latents # Unscale
+        latents = latents / self.scaling_factor  # Unscale
         image = self.vae.vae.decode(latents).sample
         return image
 
@@ -194,6 +232,7 @@ class LatentDiffusionCfdModelLite(AutoCfdModel):
         image_size: int = 64,
         latent_dim: int = 4,
         noise_scheduler_timesteps: int = 1000,
+        scaling_factor: float = 4.5578,
         # Memory-efficient U-Net parameters
         unet_base_channels: int = 128,
         unet_channel_mult: tuple = (1, 2, 4, 4),
@@ -205,6 +244,7 @@ class LatentDiffusionCfdModelLite(AutoCfdModel):
         self.out_chan = out_chan
         self.n_case_params = n_case_params
         self.latent_dim = latent_dim
+        self.scaling_factor = scaling_factor
 
         # --- 1. Load the pre-trained VAE and freeze it ---
         self.vae = CfdVaeLite(in_chan=self.out_chan, out_chan=self.out_chan, latent_dim=latent_dim)
@@ -313,16 +353,33 @@ class LatentDiffusionCfdModelLite(AutoCfdModel):
     def forward(
         self, inputs: Tensor, case_params: Tensor, label: Optional[Tensor] = None, mask: Optional[Tensor] = None
     ) -> Dict[str, Tensor]:
+        """
+        Training forward pass.
+
+        Args:
+            inputs: Input velocity field [B, in_chan, H, W]
+            case_params: Case parameters [B, n_case_params]
+            label: Target velocity field [B, out_chan, H, W]
+            mask: Optional mask tensor
+
+        Returns:
+            Dictionary containing predictions and losses
+        """
         if label is None:
             raise ValueError("LDM requires a label for training.")
 
+        # Validate input shapes
+        assert inputs.shape[1] == self.in_chan, f"Expected {self.in_chan} input channels, got {inputs.shape[1]}"
+        assert label.shape[1] == self.out_chan, f"Expected {self.out_chan} output channels, got {label.shape[1]}"
+        assert case_params.shape[1] == self.n_case_params, f"Expected {self.n_case_params} case params, got {case_params.shape[1]}"
+
         batch_size = inputs.shape[0]
         device = inputs.device
-        
+
         # Step 1: Encode the clean target image into the latent space
         with torch.no_grad():
             target_latents_dist = self.vae.vae.encode(label).latent_dist
-            target_latents = target_latents_dist.sample() * 4.5578
+            target_latents = target_latents_dist.sample() * self.scaling_factor
             
         # Step 2: Add noise to the latents
         noise = torch.randn_like(target_latents)
@@ -353,12 +410,24 @@ class LatentDiffusionCfdModelLite(AutoCfdModel):
     def generate(
         self, inputs: Tensor, case_params: Tensor, mask: Optional[Tensor] = None, num_inference_steps: int = 50
     ) -> Tensor:
+        """
+        Generate next frame using diffusion sampling.
+
+        Args:
+            inputs: Input velocity field [B, in_chan, H, W]
+            case_params: Case parameters [B, n_case_params]
+            mask: Optional mask tensor
+            num_inference_steps: Number of denoising steps
+
+        Returns:
+            Generated velocity field [B, out_chan, H, W]
+        """
         batch_size = inputs.shape[0]
         device = inputs.device
 
         # Encode conditioning once (it's the same for all denoising steps)
         conditioning = self.encode_conditioning(inputs, case_params)
-        
+
         # Start with random noise in the latent space
         latents = torch.randn(
             (batch_size, self.latent_dim, self.unet.config.sample_size, self.unet.config.sample_size),
@@ -371,15 +440,15 @@ class LatentDiffusionCfdModelLite(AutoCfdModel):
         for t in self.noise_scheduler.timesteps:
             # Add conditioning to current latents
             conditioned_latents = latents + conditioning
-            
+
             # Predict noise
             noise_pred = self.unet(conditioned_latents, t).sample
-            
+
             # Denoise one step
             latents = self.noise_scheduler.step(noise_pred, t, latents).prev_sample
 
         # Decode the clean latents back to full-resolution image
-        latents = 1 / 4.5578 * latents
+        latents = latents / self.scaling_factor  # Unscale
         image = self.vae.vae.decode(latents).sample
         return image
 

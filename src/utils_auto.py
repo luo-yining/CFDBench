@@ -124,23 +124,24 @@ def init_model(args: Args) -> AutoCfdModel:
         return model
     elif args.model == "latent_diffusion":
         model = LatentDiffusionCfdModel(
-        in_chan=args.in_chan,
-        out_chan=args.out_ch,
-        n_case_params=n_case_params,
-        vae_weights_path=args.ldm_vae_weights_path,
-        noise_scheduler_timesteps=args.ldm_noise_scheduler_timesteps,
-        loss_fn=loss_fn,
-        latent_dim=args.ldm_latent_dim,
-    ).cuda()
+            in_chan=args.in_chan,
+            out_chan=args.out_ch,
+            n_case_params=n_case_params,
+            vae_weights_path=args.ldm_vae_weights_path,
+            noise_scheduler_timesteps=args.ldm_noise_scheduler_timesteps,
+            loss_fn=loss_fn,
+            latent_dim=args.ldm_latent_dim,
+            scaling_factor=args.ldm_scaling_factor,
+        ).cuda()
         return model
     elif args.model == 'latent_diffusion2':
-        
+
         # Get U-Net architecture parameters with defaults
         unet_base_channels = getattr(args, 'unet_base_channels', 64)
         unet_channel_mult = getattr(args, 'unet_channel_mult', (1, 2, 4))
         unet_num_res_blocks = getattr(args, 'unet_num_res_blocks', 1)
         unet_attention_resolutions = getattr(args, 'unet_attention_resolutions', ())
-        
+
         model = LatentDiffusionCfdModel2(
             in_chan=args.in_chan,
             out_chan=args.out_chan,
@@ -150,6 +151,7 @@ def init_model(args: Args) -> AutoCfdModel:
             image_size=64,
             latent_dim=args.ldm_latent_dim,
             noise_scheduler_timesteps=args.ldm_noise_scheduler_timesteps,
+            scaling_factor=args.ldm_scaling_factor,
             # Pass the memory-efficient parameters
             unet_base_channels=unet_base_channels,
             unet_channel_mult=unet_channel_mult,

@@ -341,12 +341,12 @@ class CylinderFlowDataset(CfdDataset):
         self.num_features = 0
         self.num_frames: List[int] = []
         features: List[Tensor] = []
-        case_ids: List[int] = []  # 每个样本对应的case的id
+        case_ids: List[int] = [] 
 
     
         for case_id, case_dir in enumerate(tqdm(case_dirs)):
             # (T, c, h, w), dict
-            this_case_features, this_case_params = load_case_data_64x64(case_dir)
+            this_case_features, this_case_params = load_case_data_fix(case_dir)
             if self.norm_props:
                 normalize_physics_props(this_case_params)
             if self.norm_bc:
