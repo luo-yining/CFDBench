@@ -168,6 +168,7 @@ def init_model(args: Args) -> AutoCfdModel:
             n_case_params=n_case_params,
             image_size=64,
             noise_scheduler_timesteps=args.ldm_noise_scheduler_timesteps,
+            use_gradient_checkpointing=args.use_gradient_checkpointing,
         ).cuda()
         return model
     else:

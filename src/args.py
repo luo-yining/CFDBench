@@ -146,7 +146,13 @@ class Args(Tap):
     # --- Hardcoded the pre-calculated scaling factor ---
     ldm_scaling_factor: float = 4.5578
     """The scaling factor for the VAE latent space."""
-    
+
+    use_gradient_checkpointing: bool = True
+    """Enable gradient checkpointing for diffusion models to save VRAM (slower training)."""
+
+    gradient_accumulation_steps: int = 1
+    """Number of gradient accumulation steps. Effective batch size = batch_size * gradient_accumulation_steps."""
+
     vae_kl_weight: float = 1e-4
     """The weight of the KL Divergence loss for VAE training."""
     

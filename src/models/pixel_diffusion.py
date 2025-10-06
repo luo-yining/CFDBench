@@ -24,6 +24,7 @@ class PixelDiffusionCfdModel(AutoCfdModel):
         n_case_params: int,
         image_size: int = 64,
         noise_scheduler_timesteps: int = 1000,
+        use_gradient_checkpointing: bool = True,
     ):
         super().__init__(loss_fn)
         self.in_chan = in_chan
@@ -54,8 +55,9 @@ class PixelDiffusionCfdModel(AutoCfdModel):
             block_out_channels=(32, 64, 128, 256),
         )
 
-        # Enable gradient checkpointing to save VRAM
-        self.unet.enable_gradient_checkpointing()
+        # Enable gradient checkpointing to save VRAM (optional, slows training)
+        if use_gradient_checkpointing:
+            self.unet.enable_gradient_checkpointing()
 
         self.noise_scheduler = DDPMScheduler(
             num_train_timesteps=noise_scheduler_timesteps,
