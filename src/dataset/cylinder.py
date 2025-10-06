@@ -10,7 +10,10 @@ import numpy as np
 
 if __name__ == "__main__":
     from base import CfdDataset, CfdAutoDataset
-    from utils import (
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from utils.common import (
         load_json, normalize_bc, normalize_physics_props)  # type: ignore
 else:
     from .base import CfdDataset, CfdAutoDataset

@@ -14,7 +14,7 @@ from models.base_model import CfdModel
 from models.deeponet import DeepONet
 from models.ffn import FfnModel
 from models.loss import loss_name_to_fn
-from utils import (
+from utils.common import (
     dump_json,
     plot_loss,
     get_output_dir,

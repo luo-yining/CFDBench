@@ -1,8 +1,12 @@
 from pathlib import Path
+import sys
+
+# Add src directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'src'))
 
 import numpy as np
 
-from utils import load_json
+from utils.common import load_json
 
 
 def get_dev_losses(output_dir: Path):

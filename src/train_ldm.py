@@ -14,8 +14,8 @@ from torch.amp import GradScaler
 # Imports from the CFDBench project
 from models.latent_diffusion import LatentDiffusionCfdModel
 from dataset import get_auto_dataset
-from utils_auto import init_model 
-from utils import plot_predictions, dump_json, load_best_ckpt
+from utils.autoregressive import init_model
+from utils.common import plot_predictions, dump_json, load_best_ckpt
 from args import Args
 
 def evaluate_ldm(model: LatentDiffusionCfdModel, dataloader, device, output_dir: Path, plot_interval: int = 20):

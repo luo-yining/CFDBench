@@ -16,7 +16,7 @@ class Args(Tap):
 
     num_epochs: int = 10  # Number of epochs to train for
 
-    eval_interval: int = 10
+    eval_interval: int = 5
     """Evaluate every eval_interval epochs, and save checkpoint."""
 
     log_interval: int = 50  # Log training progress every log_interval batches
@@ -40,7 +40,7 @@ class Args(Tap):
     out_chan: int = 2
     """Number of output channels, only applicable to autoregressive models"""
 
-    batch_size: int = 1
+    batch_size: int = 8
     eval_batch_size: int = 2
 
      # --- Added Mixed Precision Flag ---
@@ -72,7 +72,7 @@ class Args(Tap):
     num_cols = 64
     """Number of columns in the lattice that represents the field."""
 
-    delta_time: float = 0.2
+    delta_time: float = 0.1
     """The time step size."""
 
     # FFN hyperparameters

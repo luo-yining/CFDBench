@@ -19,8 +19,8 @@ from torch.amp import GradScaler
 # Imports from the CFDBench project
 from models.ldm2 import LatentDiffusionCfdModel2, LatentDiffusionCfdModelLite
 from dataset import get_auto_dataset
-from utils_auto import init_model
-from utils import plot_predictions, dump_json, load_best_ckpt
+from utils.autoregressive import init_model
+from utils.common import plot_predictions, dump_json, load_best_ckpt
 from args import Args
 
 def evaluate_ldm(model: LatentDiffusionCfdModel2, dataloader, device, output_dir: Path, plot_interval: int = 50, max_eval_batches: int = 50):
@@ -167,11 +167,11 @@ def main():
         print(f"Initial GPU memory: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
 
    
-    args.batch_size = 4
+    #rgs.batch_size = 4
     print(f"batch size: {args.batch_size}")
     
     # Use gradient accumulation to compensate for small batch sizes
-    args.gradient_accumulation_steps = 2  
+    args.gradient_accumulation_steps = 1
     print(f"✓ Gradient accumulation steps: {args.gradient_accumulation_steps}")
 
     # --- 1. Load Data ---
@@ -250,9 +250,14 @@ def main():
 
     # Minimal workers and no pin_memory to reduce overhead
     train_loader = DataLoader(train_data_raw, batch_size=args.batch_size, shuffle=True, 
-                              collate_fn=collate_fn_ldm, num_workers=0, pin_memory=False)
+                              collate_fn=collate_fn_ldm, num_workers=4,
+                              persistent_workers=True,
+                              pin_memory=True)
+    
     dev_loader = DataLoader(dev_data_raw, batch_size=1, 
-                           shuffle=False, collate_fn=collate_fn_ldm, num_workers=0, pin_memory=False)
+                           shuffle=False, collate_fn=collate_fn_ldm, num_workers=2,
+                           persistent_workers=True, 
+                           pin_memory=True)
 
     print("\n" + "="*50)
     print("Memory-Optimized Configuration:")
