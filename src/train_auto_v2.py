@@ -14,7 +14,13 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from torch.amp import autocast, GradScaler
+# PyTorch version-compatible import
+try:
+    from torch.amp import autocast, GradScaler
+    USE_TORCH_AMP = True
+except ImportError:
+    from torch.cuda.amp import autocast, GradScaler
+    USE_TORCH_AMP = False
 from pathlib import Path
 from tqdm.auto import tqdm
 from typing import Dict, List, Optional
@@ -158,8 +164,12 @@ def evaluate(
             input_scores[f"input_{key}"].append(baseline_loss[key].cpu().item())
 
         # Forward pass with mixed precision
-        with autocast(device_type=device.type, dtype=torch.float16, enabled=use_mixed_precision):
-            outputs = model(**batch)
+        if USE_TORCH_AMP:
+            with autocast(device_type=device.type, dtype=torch.float16, enabled=use_mixed_precision):
+                outputs = model(**batch)
+        else:
+            with autocast(enabled=use_mixed_precision):
+                outputs = model(**batch)
 
         loss = outputs["loss"]
         preds = outputs["preds"]
@@ -236,11 +246,11 @@ def train(
         mode='min',
         factor=args.lr_scheduler_factor,
         patience=args.lr_scheduler_patience,
-        verbose=True,
     )
 
-    # Mixed precision scaler
-    scaler = GradScaler(enabled=args.use_mixed_precision)
+    # Mixed precision scaler (only enable on CUDA devices)
+    use_amp = args.use_mixed_precision and device.type == 'cuda'
+    scaler = GradScaler(enabled=use_amp)
 
     # Gradient accumulation
     gradient_accumulation_steps = getattr(args, 'gradient_accumulation_steps', 1)
@@ -275,10 +285,16 @@ def train(
             batch = {k: v.to(device) for k, v in batch.items()}
 
             # Forward pass with mixed precision
-            with autocast(device_type=device.type, dtype=torch.float16, enabled=args.use_mixed_precision):
-                outputs = model(**batch)
-                loss = outputs["loss"]["nmse"]
-                loss = loss / gradient_accumulation_steps
+            if USE_TORCH_AMP:
+                with autocast(device_type=device.type, dtype=torch.float16, enabled=args.use_mixed_precision):
+                    outputs = model(**batch)
+                    loss = outputs["loss"]["nmse"]
+                    loss = loss / gradient_accumulation_steps
+            else:
+                with autocast(enabled=args.use_mixed_precision):
+                    outputs = model(**batch)
+                    loss = outputs["loss"]["nmse"]
+                    loss = loss / gradient_accumulation_steps
 
             # Check for NaN/Inf
             if torch.isnan(loss) or torch.isinf(loss):
@@ -490,7 +506,7 @@ def main():
         best_ckpt_path = output_dir / "best_model.pt"
         if best_ckpt_path.exists():
             print(f"Loading best model from {best_ckpt_path}")
-            model.load_state_dict(torch.load(best_ckpt_path))
+            model.load_state_dict(torch.load(best_ckpt_path, map_location=device))
 
         test_scores = evaluate(
             model=model,

@@ -126,7 +126,7 @@ def init_model(args: Args) -> AutoCfdModel:
     elif args.model == "latent_diffusion":
         model = LatentDiffusionCfdModel(
             in_chan=args.in_chan,
-            out_chan=args.out_ch,
+            out_chan=args.out_chan,
             n_case_params=n_case_params,
             vae_weights_path=args.ldm_vae_weights_path,
             noise_scheduler_timesteps=args.ldm_noise_scheduler_timesteps,
