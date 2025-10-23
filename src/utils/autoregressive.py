@@ -53,7 +53,7 @@ def init_model(args: Args) -> AutoCfdModel:
             loss_fn=loss_fn,
             width=args.autoffn_width,
             depth=args.autoffn_depth,
-        ).cuda()
+        )
         return model
     elif args.model == "auto_deeponet":
         branch_dim = n_cols * n_rows + n_case_params
@@ -65,7 +65,7 @@ def init_model(args: Args) -> AutoCfdModel:
             trunk_depth=args.trunk_depth,
             branch_depth=args.branch_depth,
             act_name=args.act_fn,
-        ).cuda()
+        )
         return model
     elif args.model == "auto_edeeponet":
         model = AutoEDeepONet(
@@ -87,7 +87,7 @@ def init_model(args: Args) -> AutoCfdModel:
             num_case_params=n_case_params,
             query_dim=2,
             loss_fn=loss_fn,
-        ).cuda()
+        )
         return model
     elif args.model == "resnet":
         model = ResNet(
@@ -99,7 +99,7 @@ def init_model(args: Args) -> AutoCfdModel:
             num_blocks=args.resnet_depth,
             kernel_size=args.resnet_kernel_size,
             padding=args.resnet_padding,
-        ).cuda()
+        )
         return model
     elif args.model == "unet":
         model = UNet(
@@ -109,7 +109,7 @@ def init_model(args: Args) -> AutoCfdModel:
             n_case_params=n_case_params,
             insert_case_params_at=args.unet_insert_case_params_at,
             dim=args.unet_dim,
-        ).cuda()
+        )
         return model
     elif args.model == "fno":
         model = Fno2d(
@@ -121,7 +121,7 @@ def init_model(args: Args) -> AutoCfdModel:
             hidden_dim=args.fno_hidden_dim,  # Hid. dim. in the temporal domain
             modes1=args.fno_modes_x,
             modes2=args.fno_modes_y,
-        ).cuda()
+        )
         return model
     elif args.model == "latent_diffusion":
         model = LatentDiffusionCfdModel(
@@ -133,7 +133,7 @@ def init_model(args: Args) -> AutoCfdModel:
             loss_fn=loss_fn,
             latent_dim=args.ldm_latent_dim,
             scaling_factor=args.ldm_scaling_factor,
-        ).cuda()
+        )
         return model
     elif args.model == 'latent_diffusion2':
 
@@ -169,7 +169,11 @@ def init_model(args: Args) -> AutoCfdModel:
             image_size=64,
             noise_scheduler_timesteps=args.ldm_noise_scheduler_timesteps,
             use_gradient_checkpointing=args.use_gradient_checkpointing,
-        ).cuda()
+            base_channels=args.pixel_diffusion_base_channels,
+            channel_mults=args.pixel_diffusion_channel_mults,
+            num_res_blocks=args.pixel_diffusion_num_res_blocks,
+            dropout=args.pixel_diffusion_dropout,
+        )
         return model
     else:
         raise ValueError(f"Invalid model name: {args.model}")

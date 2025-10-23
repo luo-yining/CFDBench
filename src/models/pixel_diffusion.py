@@ -6,15 +6,17 @@ from tqdm import tqdm
 
 from .base_model import AutoCfdModel
 from .loss import MseLoss
-from diffusers import UNet2DConditionModel, DDPMScheduler
+from .punetg import PUNetGCFD
+from diffusers import DDPMScheduler
 
 
 class PixelDiffusionCfdModel(AutoCfdModel):
     """
-    Pixel-space Diffusion Model using cross-attention conditioning.
+    Pixel-space Diffusion Model using PUNetG architecture.
 
     Similar to LatentDiffusionCfdModel but operates directly in pixel space
-    without a VAE encoder/decoder.
+    without a VAE encoder/decoder. Uses PUNetG-inspired U-Net with
+    timestep and case parameter conditioning.
     """
     def __init__(
         self,
@@ -25,6 +27,10 @@ class PixelDiffusionCfdModel(AutoCfdModel):
         image_size: int = 64,
         noise_scheduler_timesteps: int = 1000,
         use_gradient_checkpointing: bool = True,
+        base_channels: int = 64,
+        channel_mults: tuple = (1, 2, 4),
+        num_res_blocks: int = 2,
+        dropout: float = 0.1,
     ):
         super().__init__(loss_fn)
         self.in_chan = in_chan
@@ -32,32 +38,22 @@ class PixelDiffusionCfdModel(AutoCfdModel):
         self.n_case_params = n_case_params
         self.image_size = image_size
 
-        # Initialize the Diffusion U-Net operating in pixel space
-        # Using architecture similar to CfdVaeLite
-        self.unet = UNet2DConditionModel(
-            sample_size=image_size,
-            in_channels=out_chan,  # Operating on pixel-space images
+        # Initialize PUNetG U-Net operating in pixel space
+        # Note: PUNetG handles conditioning via timestep + case_params embeddings
+        # rather than cross-attention
+        self.unet = PUNetGCFD(
+            in_channels=out_chan,  # Operating on pixel-space images (noisy target)
             out_channels=out_chan,
-            cross_attention_dim=self.in_chan + self.n_case_params,
-            # Architecture inspired by CfdVaeLite
-            down_block_types=(
-                "CrossAttnDownBlock2D",
-                "CrossAttnDownBlock2D",
-                "CrossAttnDownBlock2D",
-                "DownBlock2D"
-            ),
-            up_block_types=(
-                "UpBlock2D",
-                "CrossAttnUpBlock2D",
-                "CrossAttnUpBlock2D",
-                "CrossAttnUpBlock2D"
-            ),
-            block_out_channels=(32, 64, 128, 256),
+            base_channels=base_channels,
+            n_case_params=n_case_params,
+            channel_mults=channel_mults,
+            num_res_blocks=num_res_blocks,
+            dropout=dropout,
         )
 
-        # Enable gradient checkpointing to save VRAM (optional, slows training)
-        if use_gradient_checkpointing:
-            self.unet.enable_gradient_checkpointing()
+        # Note: PUNetG doesn't have gradient checkpointing built-in like HF models
+        # If needed, it can be added by wrapping forward pass with torch.utils.checkpoint
+        self.use_gradient_checkpointing = use_gradient_checkpointing
 
         self.noise_scheduler = DDPMScheduler(
             num_train_timesteps=noise_scheduler_timesteps,
@@ -78,26 +74,34 @@ class PixelDiffusionCfdModel(AutoCfdModel):
         timesteps = torch.randint(0, self.noise_scheduler.config.num_train_timesteps, (batch_size,), device=device).long()
         noisy_images = self.noise_scheduler.add_noise(label, noise, timesteps)
 
-        # Step 2: Prepare conditioning signal
-        case_params_expanded = case_params.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, inputs.shape[2], inputs.shape[3])
-        conditioning_signal = torch.cat([inputs, case_params_expanded], dim=1)
-        conditioning_signal = conditioning_signal.view(batch_size, self.in_chan + self.n_case_params, -1)
-        # Permute the dimensions to [Batch, SequenceLength, FeatureDimension]
-        conditioning_signal = conditioning_signal.permute(0, 2, 1)
+        # Step 2: Predict noise using PUNetG
+        # PUNetG takes: (x, timesteps, case_params, mask)
+        # Note: PUNetG handles mask internally by concatenating it with input
+        if self.use_gradient_checkpointing and self.training:
+            # Use gradient checkpointing to save memory
+            noise_pred = torch.utils.checkpoint.checkpoint(
+                self.unet,
+                noisy_images,
+                timesteps,
+                case_params,
+                mask,
+                use_reentrant=False
+            )
+        else:
+            noise_pred = self.unet(
+                x=noisy_images,
+                timesteps=timesteps,
+                case_params=case_params,
+                mask=mask
+            )
 
-        # Step 3: Predict noise
-        noise_pred = self.unet(
-            sample=noisy_images,
-            timestep=timesteps,
-            encoder_hidden_states=conditioning_signal
-        ).sample
-
-        # Step 4: Compute loss
-        loss = F.mse_loss(noise_pred, noise)
+        # Step 3: Compute loss using the loss function to get all metrics
+        # This ensures compatibility with evaluation code that expects all score_names
+        loss_dict = self.loss_fn(noise_pred, noise)
 
         return {
             "preds": noise_pred,
-            "loss": {"mse": loss, "nmse": loss / (torch.square(noise).mean() + 1e-8)}
+            "loss": loss_dict
         }
 
     @torch.no_grad()
@@ -105,12 +109,6 @@ class PixelDiffusionCfdModel(AutoCfdModel):
         self, inputs: Tensor, case_params: Tensor, mask: Optional[Tensor] = None, num_inference_steps: int = 50
     ) -> Tensor:
         batch_size = inputs.shape[0]
-
-        # Prepare conditioning signal
-        case_params_expanded = case_params.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, inputs.shape[2], inputs.shape[3])
-        conditioning_signal = torch.cat([inputs, case_params_expanded], dim=1)
-        conditioning_signal = conditioning_signal.view(batch_size, self.in_chan + self.n_case_params, -1)
-        conditioning_signal = conditioning_signal.permute(0, 2, 1)
 
         # Start with random noise in pixel space
         images = torch.randn(
@@ -120,9 +118,20 @@ class PixelDiffusionCfdModel(AutoCfdModel):
 
         self.noise_scheduler.set_timesteps(num_inference_steps)
 
-        # Denoising loop in pixel space
+        # Denoising loop in pixel space using PUNetG
         for t in self.noise_scheduler.timesteps:
-            noise_pred = self.unet(sample=images, timestep=t, encoder_hidden_states=conditioning_signal).sample
+            # Create timestep tensor for the batch
+            timestep_batch = torch.full((batch_size,), t, device=inputs.device, dtype=torch.long)
+
+            # Predict noise using PUNetG
+            noise_pred = self.unet(
+                x=images,
+                timesteps=timestep_batch,
+                case_params=case_params,
+                mask=mask
+            )
+
+            # Denoise one step
             images = self.noise_scheduler.step(noise_pred, t, images).prev_sample
 
         return images

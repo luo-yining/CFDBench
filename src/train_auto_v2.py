@@ -111,8 +111,8 @@ def evaluate(
     model: AutoCfdModel,
     dataloader: DataLoader,
     device: torch.device,
-    output_dir: Path,
-    plot_interval: int = 50,
+    output_dir: Optional[Path] = None,
+    plot_interval: Optional[int] = 50,
     max_eval_batches: Optional[int] = None,
     use_mixed_precision: bool = True,
 ) -> Dict:
@@ -123,8 +123,8 @@ def evaluate(
         model: Model to evaluate
         dataloader: DataLoader for evaluation data
         device: Device to run evaluation on
-        output_dir: Directory to save evaluation results
-        plot_interval: Plot predictions every N batches
+        output_dir: Directory to save evaluation results (None = don't save anything)
+        plot_interval: Plot predictions every N batches (None = skip all image saving)
         max_eval_batches: Maximum number of batches to evaluate (None = all)
         use_mixed_precision: Whether to use mixed precision
 
@@ -132,9 +132,14 @@ def evaluate(
         Dictionary with evaluation scores
     """
     model.eval()
-    output_dir.mkdir(exist_ok=True, parents=True)
-    image_dir = output_dir / "images"
-    image_dir.mkdir(exist_ok=True, parents=True)
+
+    # Only create directories if we're actually saving outputs
+    if output_dir is not None:
+        output_dir.mkdir(exist_ok=True, parents=True)
+        image_dir = output_dir / "images"
+        image_dir.mkdir(exist_ok=True, parents=True)
+    else:
+        image_dir = None
 
     score_names = model.loss_fn.get_score_names()
     scores = {name: [] for name in score_names}
@@ -159,7 +164,8 @@ def evaluate(
         mask = batch["mask"]
 
         # Compute baseline (input vs label) scores
-        baseline_loss = model.loss_fn(labels=labels, preds=inputs)
+        # Using inputs as predictions to see how well a naive "no change" model would do
+        baseline_loss = model.loss_fn(preds=inputs, labels=labels)
         for key in score_names:
             input_scores[f"input_{key}"].append(baseline_loss[key].cpu().item())
 
@@ -177,12 +183,16 @@ def evaluate(
         # Reshape predictions if needed
         preds = reshape_predictions(preds, model, labels.shape)
 
+        # Compute all metrics using the loss function
+        # This ensures we get all metrics that get_score_names() promised
+        all_metrics = model.loss_fn(preds, labels)
+
         # Record scores
         for key in score_names:
-            scores[key].append(loss[key].cpu().item())
+            scores[key].append(all_metrics[key].cpu().item())
 
-        # Plot predictions
-        if batch_idx % plot_interval == 0 and len(inputs) > 0:
+        # Plot predictions (only if we have an output directory and plot_interval is set)
+        if image_dir is not None and plot_interval is not None and batch_idx % plot_interval == 0 and len(inputs) > 0:
             plot_predictions(
                 inp=inputs[0, 0].cpu(),  # u-velocity
                 label=labels[0, 0].cpu(),
@@ -272,6 +282,10 @@ def train(
     best_dev_loss = float('inf')
     all_train_losses = []
 
+    # Track epoch-level losses for plotting
+    epoch_train_losses = []  # Average train loss per epoch
+    epoch_dev_losses = []    # Dev loss per epoch (when evaluated)
+
     # Start training
     for epoch in range(args.num_epochs):
         model.train()
@@ -286,14 +300,14 @@ def train(
 
             # Forward pass with mixed precision
             if USE_TORCH_AMP:
-                with autocast(device_type=device.type, dtype=torch.float16, enabled=args.use_mixed_precision):
+                with autocast(device_type=device.type, dtype=torch.float16, enabled=use_amp):
                     outputs = model(**batch)
-                    loss = outputs["loss"]["nmse"]
+                    loss = outputs["loss"][args.loss_name]
                     loss = loss / gradient_accumulation_steps
             else:
-                with autocast(enabled=args.use_mixed_precision):
+                with autocast(enabled=use_amp):
                     outputs = model(**batch)
-                    loss = outputs["loss"]["nmse"]
+                    loss = outputs["loss"][args.loss_name]
                     loss = loss / gradient_accumulation_steps
 
             # Check for NaN/Inf
@@ -323,16 +337,15 @@ def train(
                 "lr": f"{optimizer.param_groups[0]['lr']:.2e}",
             })
 
-            # Log periodically
-            if global_step % args.log_interval == 0:
-                print(f"\n[Epoch {epoch+1}, Step {batch_idx+1}] loss={actual_loss:.6f}, lr={optimizer.param_groups[0]['lr']:.2e}")
-
             # Clear memory
             del batch, outputs, loss
 
         # Epoch statistics
         epoch_train_loss = np.mean(epoch_losses)
         epoch_time = time.time() - epoch_start_time
+
+        # Track epoch-level train loss
+        epoch_train_losses.append(float(epoch_train_loss))
 
         print(f"\n=== Epoch {epoch+1} Summary ===")
         print(f"  Train loss: {epoch_train_loss:.6f}")
@@ -344,56 +357,78 @@ def train(
 
         # Evaluation
         if (epoch + 1) % args.eval_interval == 0:
-            ckpt_dir = output_dir / f"ckpt-{epoch}"
-            ckpt_dir.mkdir(exist_ok=True, parents=True)
+            # Determine what to save this epoch
+            should_save_checkpoint = (epoch + 1) % args.save_checkpoint_every_n_epochs == 0
+            should_save_images = (epoch + 1) % args.save_images_every_n_epochs == 0
+
+            # Only create checkpoint directory if we're actually saving something substantial
+            # Otherwise just do evaluation without creating directories
+            if should_save_checkpoint or should_save_images:
+                ckpt_dir = output_dir / f"ckpt-{epoch}"
+                plot_interval = 50 if should_save_images else None
+            else:
+                # Don't save anything - just run evaluation
+                ckpt_dir = None
+                plot_interval = None
 
             dev_scores = evaluate(
                 model=model,
                 dataloader=dev_loader,
                 device=device,
                 output_dir=ckpt_dir,
-                plot_interval=50,
+                plot_interval=plot_interval,
                 max_eval_batches=getattr(args, 'max_eval_batches', None),
-                use_mixed_precision=args.use_mixed_precision,
+                use_mixed_precision=use_amp,
             )
 
-            dev_loss = dev_scores["mean"]["nmse"]
+            dev_loss = dev_scores["mean"][args.loss_name]
+
+            # Track epoch-level dev loss
+            epoch_dev_losses.append({
+                "epoch": epoch,
+                "dev_loss": float(dev_loss)
+            })
 
             # Update learning rate scheduler
             scheduler.step(dev_loss)
 
-            # Save checkpoint
-            ckpt_path = ckpt_dir / "model.pt"
-            torch.save({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'scheduler_state_dict': scheduler.state_dict(),
-                'scaler_state_dict': scaler.state_dict(),
-                'train_loss': epoch_train_loss,
-                'dev_loss': dev_loss,
-            }, ckpt_path)
-            print(f"  Checkpoint saved to {ckpt_path}")
+            # Save full checkpoint only every N epochs (to save disk space)
+            if should_save_checkpoint:
+                ckpt_dir.mkdir(exist_ok=True, parents=True)  # Create directory now
+                ckpt_path = ckpt_dir / "model.pt"
+                torch.save({
+                    'epoch': epoch,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'scheduler_state_dict': scheduler.state_dict(),
+                    'scaler_state_dict': scaler.state_dict(),
+                    'train_loss': epoch_train_loss,
+                    'dev_loss': dev_loss,
+                }, ckpt_path)
+                print(f"  Full checkpoint saved to {ckpt_path}")
 
-            # Save best model
+                # Save scores alongside the checkpoint
+                epoch_summary = {
+                    "epoch": epoch,
+                    "train_loss": float(epoch_train_loss),
+                    "dev_loss": float(dev_loss),
+                    "dev_scores": dev_scores["mean"],
+                    "time": float(epoch_time),
+                    "lr": optimizer.param_groups[0]['lr'],
+                }
+                dump_json(epoch_summary, ckpt_dir / "scores.json")
+                dump_json(dev_scores, ckpt_dir / "dev_scores.json")
+                dump_json(epoch_losses, ckpt_dir / "train_losses.json")
+            else:
+                next_checkpoint_epoch = ((epoch // args.save_checkpoint_every_n_epochs) + 1) * args.save_checkpoint_every_n_epochs
+                print(f"  Evaluated without saving checkpoint (next checkpoint at epoch {next_checkpoint_epoch})")
+
+            # Save best model (always save when it improves!)
             if dev_loss < best_dev_loss:
                 best_dev_loss = dev_loss
                 best_ckpt_path = output_dir / "best_model.pt"
                 torch.save(model.state_dict(), best_ckpt_path)
                 print(f"  *** New best model saved! Dev loss: {dev_loss:.6f} ***")
-
-            # Save scores
-            epoch_summary = {
-                "epoch": epoch,
-                "train_loss": float(epoch_train_loss),
-                "dev_loss": float(dev_loss),
-                "dev_scores": dev_scores["mean"],
-                "time": float(epoch_time),
-                "lr": optimizer.param_groups[0]['lr'],
-            }
-            dump_json(epoch_summary, ckpt_dir / "scores.json")
-            dump_json(dev_scores, ckpt_dir / "dev_scores.json")
-            dump_json(epoch_losses, ckpt_dir / "train_losses.json")
 
             # Clear cache after evaluation
             torch.cuda.empty_cache()
@@ -401,6 +436,16 @@ def train(
 
     # Save final training losses
     dump_json(all_train_losses, output_dir / "all_train_losses.json")
+
+    # Save epoch-level loss history for plotting
+    loss_history = {
+        "train_losses": epoch_train_losses,  # List of average train loss per epoch
+        "dev_losses": epoch_dev_losses,       # List of {epoch, dev_loss} dicts
+        "epochs": list(range(args.num_epochs)),
+    }
+    dump_json(loss_history, output_dir / "loss_history.json")
+    print(f"  Loss history saved to: {output_dir / 'loss_history.json'}")
+
     print("\n====== Training Complete ======")
     print(f"  Best dev loss: {best_dev_loss:.6f}")
     print(f"  Best model saved to: {output_dir / 'best_model.pt'}")
@@ -485,6 +530,9 @@ def main():
     if torch.cuda.is_available():
         print(f"GPU memory after model load: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB\n")
 
+    # Mixed precision setting (only enable on CUDA devices)
+    use_amp = args.use_mixed_precision and device.type == 'cuda'
+
     # Train
     if "train" in args.mode:
         train(
@@ -514,7 +562,7 @@ def main():
             device=device,
             output_dir=test_dir,
             plot_interval=10,
-            use_mixed_precision=args.use_mixed_precision,
+            use_mixed_precision=use_amp,
         )
 
         dump_json(test_scores, test_dir / "test_scores.json")
