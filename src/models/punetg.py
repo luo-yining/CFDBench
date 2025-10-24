@@ -1,360 +1,339 @@
 """
 PUNetG-inspired U-Net for CFD Diffusion Model
-Updated with accurate ResNetBlock structure from the paper
+Based on user-provided code, adapted slightly for clarity and structure.
+Includes ResNetBlock structure inspired by diffusion model papers.
 """
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional
+from typing import Optional, List # Added List for skip_connections type hint
 
 
+# RMSNorm remains here, although not currently used by ResNetBlock below
 class RMSNorm(nn.Module):
     """Root Mean Square Layer Normalization."""
     def __init__(self, dim: int, eps: float = 1e-6):
         super().__init__()
         self.eps = eps
         self.weight = nn.Parameter(torch.ones(dim))
-        
+
+    def _norm(self, x):
+        # Calculate RMS over the channel dimension (dim=1)
+        return x * torch.rsqrt(x.pow(2).mean(dim=1, keepdim=True) + self.eps)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Args:
-            x: [B, C, H, W]
+            x: Input tensor [B, C, H, W]
         """
-        # Normalize over channel dimension
-        norm = torch.sqrt(x.pow(2).mean(dim=1, keepdim=True) + self.eps)
-        x_normed = x / norm
-        # Scale by learnable weight
-        return x_normed * self.weight[None, :, None, None]
+        output = self._norm(x.float()).type_as(x)
+        # Apply learnable weight, broadcasting along H and W dimensions
+        return output * self.weight[None, :, None, None]
 
 
 class ResNetBlock(nn.Module):
     """
-    ResNet block with timestep conditioning injection.
-    Based on the paper's architecture diagram.
+    ResNet block with timestep and conditioning embedding injection.
+    Uses GroupNorm and SiLU.
     """
     def __init__(
         self,
         in_channels: int,
         out_channels: int,
-        time_embed_dim: int,
+        # Combined dimension of timestep + case_param embeddings
+        condition_embed_dim: int,
         dropout: float = 0.1,
+        num_groups: int = 32, # Added num_groups parameter
     ):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
-        
-        # Timestep embedding projection (top branch in diagram)
-        self.time_mlp = nn.Sequential(
-            nn.Linear(time_embed_dim, out_channels),
+
+        # --- Conditioning Projection ---
+        self.condition_mlp = nn.Sequential(
             nn.SiLU(),
-            nn.Linear(out_channels, out_channels),
-            nn.SiLU(),
-            nn.Linear(out_channels, out_channels),
+            nn.Linear(condition_embed_dim, out_channels * 2), # Project to get scale and shift
         )
-        
-        # Main feature path (bottom branch in diagram)
-        self.norm1 = nn.LayerNorm(in_channels)
-        self.conv1 = nn.Conv2d(in_channels, out_channels, 3, padding=1)
-        
-        self.norm2 = RMSNorm(out_channels)
-        self.conv2 = nn.Conv2d(out_channels, out_channels, 3, padding=1)
-        
+
+        # --- Main Feature Path ---
+        # Ensure num_groups is not larger than in_channels
+        self.norm1 = nn.GroupNorm(min(num_groups, in_channels), in_channels, eps=1e-6)
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
+
+        # Ensure num_groups is not larger than out_channels
+        self.norm2 = nn.GroupNorm(min(num_groups, out_channels), out_channels, eps=1e-6)
+        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1)
+
         self.dropout = nn.Dropout(dropout)
         self.act = nn.SiLU()
-        
-        # Skip connection (if channels change)
+
+        # --- Skip Connection ---
         if in_channels != out_channels:
-            self.skip = nn.Conv2d(in_channels, out_channels, 1)
+            self.skip_connection = nn.Conv2d(in_channels, out_channels, kernel_size=1)
         else:
-            self.skip = nn.Identity()
-    
-    def forward(self, x: torch.Tensor, time_emb: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
-            x: [B, C, H, W] feature map
-            time_emb: [B, time_embed_dim] timestep + condition embedding
-        Returns:
-            [B, out_channels, H, W]
-        """
-        # Store for skip connection
-        skip = self.skip(x)
-        
-        # Main path - first block
-        # LayerNorm expects [B, H, W, C], so we need to permute
-        B, C, H, W = x.shape
-        h = x.permute(0, 2, 3, 1)  # [B, H, W, C]
-        h = self.norm1(h)
-        h = h.permute(0, 3, 1, 2)  # [B, C, H, W]
+            self.skip_connection = nn.Identity()
+
+    def forward(self, x: torch.Tensor, condition_emb: torch.Tensor) -> torch.Tensor:
+        residual = self.skip_connection(x)
+
+        h = self.norm1(x)
         h = self.act(h)
-        h = self.conv1(h)  # [B, out_channels, H, W]
-        
-        # Add timestep conditioning (first + in diagram)
-        time_scale = self.time_mlp(time_emb)  # [B, out_channels]
-        time_scale = time_scale[:, :, None, None]  # [B, out_channels, 1, 1]
-        h = h + time_scale
-        
-        # Main path - second block
-        h = self.norm2(h)
+        h = self.conv1(h)
+
+        cond_proj = self.condition_mlp(condition_emb)[:, :, None, None]
+        scale, shift = cond_proj.chunk(2, dim=1)
+
+        h = self.norm2(h) * (1 + scale) + shift # Modulate features
         h = self.act(h)
         h = self.dropout(h)
         h = self.conv2(h)
-        
-        # Add skip connection (second + in diagram)
-        return h + skip
+
+        return h + residual
 
 
 class Downsample(nn.Module):
-    """Spatial downsampling by 2x."""
+    """Spatial downsampling layer using strided convolution."""
     def __init__(self, channels: int):
         super().__init__()
-        self.conv = nn.Conv2d(channels, channels, 3, stride=2, padding=1)
-    
+        # Use Conv2d with stride 2 for downsampling
+        self.conv = nn.Conv2d(channels, channels, kernel_size=3, stride=2, padding=1)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.conv(x)
 
 
 class Upsample(nn.Module):
-    """Spatial upsampling by 2x."""
+    """Spatial upsampling layer using interpolation and convolution."""
     def __init__(self, channels: int):
         super().__init__()
-        self.conv = nn.Conv2d(channels, channels, 3, padding=1)
-    
+        self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
+        self.conv = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = F.interpolate(x, scale_factor=2, mode='nearest')
-        return self.conv(x)
+        x = self.upsample(x)
+        x = self.conv(x)
+        return x
 
 
 class TimestepEmbedding(nn.Module):
-    """Sinusoidal timestep embedding."""
+    """Sinusoidal timestep embedding module."""
     def __init__(self, dim: int):
         super().__init__()
         self.dim = dim
-        
+
     def forward(self, timesteps: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
-            timesteps: [B] integer timesteps
-        Returns:
-            [B, dim] embeddings
-        """
+        if timesteps.ndim != 1:
+            raise ValueError(f"Timesteps must be a 1D tensor, got shape {timesteps.shape}")
+
         half_dim = self.dim // 2
-        emb = torch.log(torch.tensor(10000.0)) / (half_dim - 1)
-        emb = torch.exp(torch.arange(half_dim, device=timesteps.device) * -emb)
-        emb = timesteps[:, None] * emb[None, :]
-        emb = torch.cat([torch.sin(emb), torch.cos(emb)], dim=-1)
-        return emb
+        exponent = -torch.log(torch.tensor(10000.0)) / (half_dim - 1)
+        freqs = torch.exp(torch.arange(half_dim, device=timesteps.device) * exponent)
+        args = timesteps[:, None].float() * freqs[None, :]
+        embedding = torch.cat([torch.sin(args), torch.cos(args)], dim=-1)
+        if self.dim % 2 == 1:
+            embedding = F.pad(embedding, (0, 1))
+        return embedding
 
 
 class PUNetGCFD(nn.Module):
     """
-    PUNetG-style U-Net for CFD without attention mechanisms.
-    Uses ResNetBlock structure from the paper diagram.
+    PUNetG-style U-Net for CFD, adapted for diffusion model conditioning.
     """
     def __init__(
         self,
-        in_channels: int = 2,           # u, v velocities
-        out_channels: int = 2,
-        base_channels: int = 64,        # C in the paper
-        n_case_params: int = 5,         # Physical parameters
-        channel_mults: tuple = (1, 2, 4),  # Channel multipliers per level
-        num_res_blocks: int = 2,        # ResNet blocks per level
+        in_channels: int,
+        out_channels: int,
+        base_channels: int = 64,
+        n_case_params: int = 5,
+        channel_mults: tuple = (1, 2, 4),
+        num_res_blocks: int = 2,
         dropout: float = 0.1,
+        num_groups_norm: int = 32, # Number of groups for GroupNorm
     ):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
-        
-        # Conditioning embeddings
+
+        # --- Conditioning Embeddings ---
         time_embed_dim = base_channels * 4
-        
-        # Timestep embedding (σ in diagram)
         self.time_embed = nn.Sequential(
             TimestepEmbedding(base_channels),
-            nn.Linear(base_channels, time_embed_dim),
-            nn.SiLU(),
+            nn.Linear(base_channels, time_embed_dim), nn.SiLU(),
             nn.Linear(time_embed_dim, time_embed_dim),
         )
-        
-        # Case parameters embedding (y in diagram)
         self.cond_embed = nn.Sequential(
-            nn.Linear(n_case_params, time_embed_dim),
-            nn.SiLU(),
+            nn.Linear(n_case_params, time_embed_dim), nn.SiLU(),
             nn.Linear(time_embed_dim, time_embed_dim),
         )
-        
-        # Combined conditioning dimension passed to ResNetBlocks
-        # We'll concatenate time + case params
         combined_embed_dim = time_embed_dim * 2
-        
-        # Input projection (x_σ in diagram - geometry/velocity field)
-        # Include mask as additional channel
-        self.conv_in = nn.Conv2d(in_channels + 1, base_channels, 3, padding=1)
-        
-        # Build encoder blocks
+
+        # --- U-Net Architecture ---
+        self.conv_in = nn.Conv2d(in_channels, base_channels, kernel_size=3, padding=1)
+
+        # --- Encoder ---
         self.down_blocks = nn.ModuleList()
-        self.downsamplers = nn.ModuleList()
-        
-        channels = [base_channels * m for m in channel_mults]
-        in_ch = base_channels
-        
-        for i, out_ch in enumerate(channels):
-            blocks = nn.ModuleList()
+        channels = [base_channels]
+        current_channels = base_channels
+        for i, mult in enumerate(channel_mults):
+            out_ch = base_channels * mult
+            level_blocks = nn.ModuleList()
             for _ in range(num_res_blocks):
-                blocks.append(
-                    ResNetBlock(in_ch, out_ch, combined_embed_dim, dropout)
+                level_blocks.append(
+                    ResNetBlock(current_channels, out_ch, combined_embed_dim, dropout, num_groups=num_groups_norm)
                 )
-                in_ch = out_ch
-            self.down_blocks.append(blocks)
-            
-            # Downsample (except at last level)
-            if i < len(channels) - 1:
-                self.downsamplers.append(Downsample(out_ch))
-            else:
-                self.downsamplers.append(nn.Identity())
-        
-        # Bottleneck
+                current_channels = out_ch
+                channels.append(current_channels) # Store channels after each ResBlock
+            is_last = (i == len(channel_mults) - 1)
+            # Add downsampling unless it's the last level
+            level_blocks.append(Downsample(current_channels) if not is_last else nn.Identity())
+            self.down_blocks.append(level_blocks)
+
+
+        # --- Bottleneck ---
         self.mid_block1 = ResNetBlock(
-            channels[-1], channels[-1], combined_embed_dim, dropout
+            current_channels, current_channels, combined_embed_dim, dropout, num_groups=num_groups_norm
         )
         self.mid_block2 = ResNetBlock(
-            channels[-1], channels[-1], combined_embed_dim, dropout
+            current_channels, current_channels, combined_embed_dim, dropout, num_groups=num_groups_norm
         )
-        
-        # Build decoder blocks
+
+        # --- Decoder ---
         self.up_blocks = nn.ModuleList()
-        self.upsamplers = nn.ModuleList()
-        
-        reversed_channels = list(reversed(channels))
-        
-        for i in range(len(reversed_channels)):
-            in_ch = reversed_channels[i]
-            out_ch = reversed_channels[i + 1] if i < len(reversed_channels) - 1 else base_channels
-            
-            # Upsample (except at first decoder level)
-            if i > 0:
-                self.upsamplers.append(Upsample(in_ch))
-            else:
-                self.upsamplers.append(nn.Identity())
-            
-            blocks = nn.ModuleList()
-            for j in range(num_res_blocks):
-                # First block receives skip connection
-                block_in = in_ch * 2 if j == 0 else out_ch
-                blocks.append(
-                    ResNetBlock(block_in, out_ch, combined_embed_dim, dropout)
+        # Iterate through channel multipliers in reverse
+        for i, mult in enumerate(reversed(channel_mults)):
+            out_ch = base_channels * mult # Target output channels for this level
+            level_blocks = nn.ModuleList()
+
+            # Add Upsampling layer first (unless it's the first decoder level)
+            is_first = (i == 0)
+            level_blocks.append(Upsample(current_channels) if not is_first else nn.Identity())
+            # After upsampling, current_channels matches the target out_ch for this level
+
+            for j in range(num_res_blocks + 1): # +1 for the skip connection block
+                # Get channel count from corresponding encoder skip connection
+                skip_channels = channels.pop()
+                block_in_channels = current_channels + skip_channels
+
+                level_blocks.append(
+                    ResNetBlock(
+                        block_in_channels,
+                        out_ch, # Output channels for ResBlock
+                        combined_embed_dim,
+                        dropout,
+                        num_groups=num_groups_norm
+                    )
                 )
-            
-            self.up_blocks.append(blocks)
-        
-        # Output projection (ConvOut in diagram)
-        self.norm_out = nn.GroupNorm(8, base_channels)
-        self.conv_out = nn.Conv2d(base_channels, out_channels, 3, padding=1)
-    
+                current_channels = out_ch # Update current channels for next block/level
+
+            self.up_blocks.append(level_blocks)
+
+
+        # --- Output Convolution ---
+        self.norm_out = nn.GroupNorm(min(num_groups_norm, base_channels), base_channels, eps=1e-6)
+        self.conv_out = nn.Conv2d(base_channels, out_channels, kernel_size=3, padding=1)
+
     def forward(
         self,
-        x: torch.Tensor,                    # [B, in_channels, H, W]
-        timesteps: torch.Tensor,             # [B]
-        case_params: torch.Tensor,           # [B, n_case_params]
-        mask: Optional[torch.Tensor] = None, # [B, 1, H, W]
+        x: torch.Tensor,
+        timesteps: torch.Tensor,
+        case_params: torch.Tensor,
+        mask: Optional[torch.Tensor] = None # Mask is handled by GenCastCfdModel concatenating it
     ) -> torch.Tensor:
-        """
-        Forward pass matching the PUNetG architecture.
-        
-        Returns:
-            [B, out_channels, H, W] predicted noise
-        """
-        # Add mask channel if provided
-        if mask is not None:
-            if mask.dim() == 3:
-                mask = mask.unsqueeze(1)
-            x = torch.cat([x, mask], dim=1)
-        else:
-            # Add dummy mask channel (all ones)
-            mask_dummy = torch.ones_like(x[:, :1])
-            x = torch.cat([x, mask_dummy], dim=1)
-        
-        # Create combined conditioning embedding
-        # This combines TimeEmbed (σ) and CondEmbed (y) from diagram
-        t_emb = self.time_embed(timesteps)      # [B, time_embed_dim]
-        c_emb = self.cond_embed(case_params)    # [B, time_embed_dim]
-        cond_emb = torch.cat([t_emb, c_emb], dim=-1)  # [B, combined_embed_dim]
-        
-        # Input projection (ConvIn in diagram)
+        """ Forward pass. """
+        # --- 1. Prepare Conditioning Embedding ---
+        t_emb = self.time_embed(timesteps)
+        c_emb = self.cond_embed(case_params)
+        cond_emb = torch.cat([t_emb, c_emb], dim=-1)
+
+        # --- 2. Input Convolution ---
         h = self.conv_in(x)
-        
-        # Encoder path
-        skip_connections = []
-        for blocks, downsampler in zip(self.down_blocks, self.downsamplers):
-            for block in blocks:
-                h = block(h, cond_emb)
-            skip_connections.append(h)
+        skip_connections: List[torch.Tensor] = []
+
+        # --- 3. Encoder ---
+        for level_blocks in self.down_blocks:
+            # Process ResBlocks and store outputs for skip connections
+            for block in level_blocks[:-1]: # All ResBlocks in the level
+                 h = block(h, cond_emb)
+                 skip_connections.append(h)
+            # Apply Downsample (or Identity)
+            downsampler = level_blocks[-1]
             h = downsampler(h)
-        
-        # Bottleneck
+
+
+        # --- 4. Bottleneck ---
         h = self.mid_block1(h, cond_emb)
         h = self.mid_block2(h, cond_emb)
-        
-        # Decoder path (with skip connections marked by red arrows in diagram)
-        for i, (upsampler, blocks) in enumerate(zip(self.upsamplers, self.up_blocks)):
+
+        # --- 5. Decoder ---
+        for level_blocks in self.up_blocks:
+            # Apply Upsample (or Identity)
+            upsampler = level_blocks[0]
             h = upsampler(h)
-            
-            # Add skip connection from encoder
-            skip = skip_connections[-(i + 1)]
-            h = torch.cat([h, skip], dim=1)
-            
-            for block in blocks:
-                h = block(h, cond_emb)
-        
-        # Output projection
+
+            # Process ResBlocks with skip connections
+            for block in level_blocks[1:]: # All ResBlocks in the level
+                 # Get skip connection from the end of the list
+                 skip = skip_connections.pop()
+                 # Concatenate skip connection before passing to ResBlock
+                 h = torch.cat([h, skip], dim=1)
+                 h = block(h, cond_emb)
+
+
+        # --- 6. Output Convolution ---
         h = self.norm_out(h)
         h = F.silu(h)
         h = self.conv_out(h)
-        
+
         return h
 
 
-# Example usage and testing
+# Example usage and testing (optional, can be removed)
 if __name__ == "__main__":
     print("=" * 60)
-    print("Testing PUNetG CFD Model")
+    print("Testing PUNetG CFD Model (with fixes)")
     print("=" * 60)
-    
+
+    # Example: Match GenCastCfdModel input size
+    # noisy_res(2) + x_t-1(2) + x_t-2(2) = 6 input channels
     model = PUNetGCFD(
-        in_channels=2,
-        out_channels=2,
+        in_channels=6,
+        out_channels=2, # Predicts noise for u, v
         base_channels=64,
         n_case_params=5,
         channel_mults=(1, 2, 4),
         num_res_blocks=2,
-    )
-    
-    # Count parameters
+    ).cuda() # Move to GPU if available
+
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"\n📊 Model Statistics:")
     print(f"  Total parameters: {total_params / 1e6:.2f}M")
     print(f"  Trainable parameters: {trainable_params / 1e6:.2f}M")
-    
-    # Test forward pass
+
     print(f"\n🧪 Testing forward pass...")
-    batch_size = 2
-    x = torch.randn(batch_size, 2, 64, 64)
-    timesteps = torch.randint(0, 1000, (batch_size,))
-    case_params = torch.randn(batch_size, 5)
-    mask = torch.ones(batch_size, 1, 64, 64)
-    
+    batch_size = 4
+    x = torch.randn(batch_size, 6, 64, 64).cuda() # Example input
+    timesteps = torch.randint(0, 1000, (batch_size,)).cuda()
+    case_params = torch.randn(batch_size, 5).cuda()
+    # Mask is included in x's channels by the wrapper model
+
     print(f"  Input shape: {x.shape}")
     print(f"  Timesteps shape: {timesteps.shape}")
     print(f"  Case params shape: {case_params.shape}")
-    print(f"  Mask shape: {mask.shape}")
-    
-    output = model(x, timesteps, case_params, mask)
+
+    # Test with autocast for mixed precision compatibility
+    try:
+        from torch.amp import autocast
+        with autocast(device_type='cuda', dtype=torch.float16):
+            output = model(x, timesteps, case_params)
+        print("  Forward pass with AMP successful.")
+    except ImportError:
+        output = model(x, timesteps, case_params)
+        print("  Forward pass without AMP successful.")
+
+
     print(f"  Output shape: {output.shape}")
-    
-    assert output.shape == x.shape, "Output shape should match input shape"
-    print("\n✅ All tests passed!")
-    
-    # Memory estimate
-    print(f"\n💾 Estimated memory per batch item:")
-    print(f"  Forward pass: ~{(output.numel() * 4) / 1e6:.1f} MB")
+
+    assert output.shape == (batch_size, 2, 64, 64), "Output shape mismatch!"
+    print("\n✅ Forward pass shape test passed!")

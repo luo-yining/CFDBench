@@ -6,6 +6,7 @@ from .tube import get_tube_datasets, get_tube_auto_datasets
 from .cavity import get_cavity_datasets, get_cavity_auto_datasets
 from .cylinder import get_cylinder_datasets, get_cylinder_auto_datasets
 from .dam import get_dam_datasets, get_dam_auto_datasets
+from .wrapper import GenCastWrapperDataset
 
 
 def get_dataset(
