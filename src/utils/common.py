@@ -262,6 +262,15 @@ def get_output_dir(args: Args, is_auto: bool = False) -> Path:
             f"lr{args.lr}" f"_width{args.ffn_width}" f"_depth{args.ffn_depth}"
         )
         return output_dir / dir_name
+    elif args.model == "latent_diffusion":
+        dir_name = f"lr{args.lr}_latentdim{args.ldm_latent_dim}_steps{args.ldm_noise_scheduler_timesteps}"
+        return output_dir / dir_name
+    elif args.model == "latent_diffusion2":
+        dir_name = f"lr{args.lr}_latentdim{args.ldm_latent_dim}_steps{args.ldm_noise_scheduler_timesteps}"
+        return output_dir / dir_name
+    elif args.model == "pixel_diffusion":
+        dir_name = f"lr{args.lr}_steps{args.ldm_noise_scheduler_timesteps}"
+        return output_dir / dir_name
     else:
         raise NotImplementedError
 

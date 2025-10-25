@@ -8,10 +8,10 @@ from torch.nn import functional as F
 import matplotlib.pyplot as plt
 
 from args import Args
-from utils import load_best_ckpt, get_output_dir, dump_json
+from utils.common import load_best_ckpt, get_output_dir, dump_json
 from dataset import get_auto_dataset
 from models.base_model import AutoCfdModel, CfdModel
-from utils_auto import init_model as init_auto_model
+from utils.autoregressive import init_model as init_auto_model
 from models.ffn import FfnModel
 from models.deeponet import DeepONet
 from models.loss import loss_name_to_fn

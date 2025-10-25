@@ -18,7 +18,7 @@ from models.auto_deeponet import AutoDeepONet
 from models.auto_edeeponet import AutoEDeepONet
 from models.auto_deeponet_cnn import AutoDeepONetCnn
 from models.auto_ffn import AutoFfn
-from utils import (
+from utils.common import (
     dump_json,
     plot,
     plot_loss,
@@ -26,7 +26,7 @@ from utils import (
     load_best_ckpt,
     plot_predictions,
 )
-from utils_auto import init_model
+from utils.autoregressive import init_model
 from args import Args
 
 

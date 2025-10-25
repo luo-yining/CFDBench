@@ -1,9 +1,14 @@
 from typing import List
+from pathlib import Path
+import sys
+
+# Add src directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'src'))
 
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from utils import get_output_dir, load_json
+from utils.common import get_output_dir, load_json
 from args import Args
 
 

@@ -6,6 +6,7 @@ from .tube import get_tube_datasets, get_tube_auto_datasets
 from .cavity import get_cavity_datasets, get_cavity_auto_datasets
 from .cylinder import get_cylinder_datasets, get_cylinder_auto_datasets
 from .dam import get_dam_datasets, get_dam_auto_datasets
+from .wrapper import GenCastWrapperDataset
 
 
 def get_dataset(
@@ -82,6 +83,7 @@ def get_auto_dataset(
     subset_name = data_name[len(problem_name) + 1 :]
     assert delta_time > 0
     print("Loading data...")
+    
     if problem_name == "tube":
         train_data, dev_data, test_data = get_tube_auto_datasets(
             data_dir / problem_name,
